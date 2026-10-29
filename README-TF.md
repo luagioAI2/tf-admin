@@ -15,7 +15,9 @@
 | 项 | 修改内容 |
 |---|---|
 | `go.mod` | `go 1.26.10` → **`go 1.24.11`**（见下文「为什么降 Go 版本」） |
-| `server/config.yaml` | jwt 签名密钥、监听端口、数据库类型、验证码策略、sqlite 连接 |
+| `server/config.yaml` | **从仓库移除 + 加进 .gitignore**（上游会提交它，那会把 jwt 密钥和数据库绝对路径带进 git）。改成只提交 `server/config.example.yaml`。见 §3.0 |
+| `server/config.example.yaml` | **新增**（DB 路径与密钥留空） |
+| `web/.env.development` | `VITE_SERVER_PORT` `8888` → **`8890`**（本项目后端端口） |
 | `server/service/enter.go` | 注册 `MallServiceGroup` |
 | `server/api/v1/enter.go` | 注册 `MallApiGroup` |
 | `server/router/enter.go` | 注册 `Mall` 路由组 |
@@ -97,30 +99,52 @@ sqlite:
 
 ## 3. 首次运行
 
-### 3.1 初始化数据库（顺序有讲究）
+### 3.0 ⚠️ 配置文件不进 git（与上游不同）
 
-`/init/initdb` 有一道守卫：`global.GVA_DB != nil` 时直接拒绝
-（报「已存在数据库配置」）。所以流程是：
+上游把 `server/config.yaml` **提交进仓库**。本项目**不**这么做，理由：
+
+- 它会把 **jwt 签名密钥**带进 git（上游默认值是 `qmPlus`，改过之后就是真密钥）
+- 它会把**数据库绝对路径**带进 git —— 别人 clone 下来跑不起来
+
+所以：
+
+```
+server/config.example.yaml   ← 提交（DB 路径与密钥都留空）
+server/config.yaml           ← 已在 .gitignore，各人本地维护
+```
+
+首次使用：
 
 ```bash
 cd server
+cp config.example.yaml config.yaml
+# 然后走下面的初始化流程（initdb 会把 DB 配置写回 config.yaml）
+```
 
-# ① 先把 config.yaml 的 sqlite.path / db-name 清空
-#    让服务以「无库」状态启动
+### 3.1 初始化数据库（顺序有讲究）
 
-# ② 启动
-go run .
+`/init/initdb` 有一道守卫：`global.GVA_DB != nil` 时直接拒绝
+（报「已存在数据库配置」）。而 `config.example.yaml` 里
+`sqlite.path` / `db-name` **本来就是空的**，所以流程是：
 
-# ③ 调初始化接口（succeeded 后会把真实配置写回 config.yaml）
+```bash
+cd server
+cp config.example.yaml config.yaml      # path/db-name 为空 → 服务以「无库」状态启动
+
+go run .                                # 启动（此时 GVA_DB == nil）
+
 curl -X POST http://127.0.0.1:8890/init/checkdb -d '{}'
 curl -X POST http://127.0.0.1:8890/init/initdb \
   -H 'Content-Type: application/json' \
   -d '{"adminPassword":"<你的密码>","dbType":"sqlite",
        "dbPath":"E:/plan/test25/tf-platform-api/data","dbName":"tf"}'
+# initdb 成功后会**把真实配置写回 config.yaml**（含自动生成的 jwt 密钥）
 
-# ④ 重启（这时配置已写回）
-go run .
+go run .                                # 重启，这次连得上库了
 ```
+
+> 💡 `dbPath` 填的是 **tf-platform-api 的 data 目录**（两边共用一个库，见 §2）。
+> 也可以直接填 `../tf-platform-api/data`（相对 server 目录）。
 
 > ⚠️ **初始化前必须让 `tf-platform-api` 先跑过一次**，
 > 否则库里只有 `sys_*` 表，后台会报 `no such table: game`。
@@ -355,9 +379,12 @@ pnpm dev                      # → http://localhost:8080，/api 代理到 8890
 pnpm build
 ```
 
-> ⚠️ `web/.env.development` 里 `VITE_SERVER_PORT` 默认是 **8888**
-> （上游默认端口）。本项目后端跑在 **8890**，需要改这个值，
-> 否则前端请求会打到「什么都没监听」的端口。
+> ✅ `web/.env.development` 里的 `VITE_SERVER_PORT` **已改成 8890**
+> （上游默认 8888，而本项目后端跑在 8890）。
+>
+> 不改这个值的话，前端请求会打到「什么都没监听」的 8888，
+> 症状是**点登录没反应**、控制台一堆 `ECONNREFUSED` ——
+> 而不是任何一条能指向「端口配错了」的提示。
 
 ---
 
@@ -382,3 +409,76 @@ pnpm build
 ### 9.3 Go 版本指令
 
 见 §1。降指令是权宜之计，长期应跟上上游的 Go 版本。
+---
+
+## 10. 移动端适配（实测）
+
+**结论：布局外壳适配了，内容页没适配。**
+
+hooks/responsive.js 会在 ody 宽度 < 992px 时把 device 切成 mobile，
+side/index.vue 随之把所有 side_mode 回落到 
+ormalMode，
+而 
+ormalMode.vue 的 watchEffect 在 mobile 下强制 isCollapse = true。
+
+### 实测数据（Chromium，390×844，账号 admin）
+
+| 项 | 结果 |
+|---|---|
+| 页面级横向溢出 | **无**（8 个页面全都没溢出） |
+| 侧栏 | **80px 折叠图标栏**（不是抽屉），主内容区只剩 **310px** |
+| 点顶栏左上角 | 无反应 |
+| 点侧栏底部箭头 | 展开到 **256px** → 主内容区只剩 **134px** |
+| 表格 | **全部横向滚动** |
+| 触摸目标 | 大量 32px 高按钮（业界下限 44px） |
+
+表格实测（内容宽 / 容器宽）：
+
+`
+用户管理      1215px / 266px   →  需要滚动 4.6 屏
+菜单管理      1660px / 266px   →  6.2 屏
+API 管理       795px / 266px   →  3.0 屏
+角色管理       920px / 266px   →  3.5 屏
+操作历史      1215px / 266px   →  4.6 屏
+代码生成器    2570px / 266px   →  9.7 屏
+`
+
+> 数字不是「功能坏了」—— 表格**能**横向滚动，功能可用。
+> 但「看一行用户要左右拖 4 屏」在实际操作里等于不可用。
+
+**触摸目标偏小**（Element Plus 默认尺寸）：
+
+`
+查询 / 重置 / 新增    80×32
+表格行内「编辑」       54×20
+「分配角色」           82×20
+复选框                14×14
+`
+
+### 截图与测量脚本
+
+本次验证用的脚本在仓库外（E:\plan\test25\），没有提交：
+
+- shoot.js — 手机/桌面双视口截图 → E:\plan\test25\shots\
+- measure.js — 量化测量（溢出 / 表格 / 字号 / 触摸目标）
+- probe*.js — 抽屉菜单、表格边界、侧栏宽度的针对性确认
+
+> 一个**测量陷阱**值得记下：一开始我把「el-table 的
+> getBoundingClientRect().right > viewport」当成布局断裂，
+> 但实际它在一个 overflow-auto 的祖先里（310px 宽，scrollWidth 1293）——
+> **是受控滚动，不是断裂**。判断越界必须先找可滚祖先。
+
+### 如果要做移动端
+
+按成本从低到高：
+
+1. **只给运营用的少数页面做适配**（最省）——
+   后台大概率不是给手机用的，是给电脑用的
+2. **表格改卡片**：< 992px 时把 el-table 换成卡片列表
+   （gin-vue-admin 没有这个能力，要自己写）
+3. **换一套移动端 UI**：引入 Vant / NutUI，给移动端单独做一套页面
+4. **做成响应式 PWA**
+
+> 本项目还没做任何一项 —— **自建的业务模块（mall）连前端页面都还没有**
+> （/#/layout/mall/* 全是 404），所以「适配手机」这件事
+> 目前只关乎上游那套管理界面。

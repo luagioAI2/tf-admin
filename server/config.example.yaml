@@ -85,7 +85,7 @@ hua-wei-obs:
     access-key: you-access-key
     secret-key: you-secret-key
 jwt:
-    signing-key: db6b9a91-a799-4989-9c94-e3f6479467fa
+    signing-key: ""   # 初始化时自动生成；生产请用环境变量注入
     expires-time: 7d
     buffer-time: 1d
     issuer: tf-admin
@@ -222,10 +222,10 @@ sqlite:
     prefix: ""
     port: ""
     config: ""
-    db-name: tf
+    db-name: ""
     username: ""
     password: ""
-    path: E:/plan/test25/tf-platform-api/data
+    path: ""
     engine: ""
     log-mode: error
     max-idle-conns: 10

@@ -42,3 +42,15 @@ web/pnpm-lock.yaml
 *.sqlite
 *.sqlite3
 worktrees/
+# ===== tf-admin 本地配置（不进 git）=====
+# 与上游不同：上游把 server/config.yaml 提交进仓库，那会把
+# 「jwt 密钥」「数据库绝对路径」也一起带进去 —— 别人 clone 下来
+# 跑不起来，而且密钥泄露。
+# 这里改成只提交 config.example.yaml，本地配置各自维护。
+server/config.yaml
+
+# 运行时产物
+server/tf-admin.exe
+server/uploads/
+server/logs/
+web/src/pathInfo.json
