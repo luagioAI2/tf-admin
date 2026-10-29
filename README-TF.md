@@ -275,7 +275,44 @@ curl -X POST http://127.0.0.1:8890/api/enterSyncApi \
 > 「孩子能看到的推广位」—— C 端接口对孩子的响应里根本不返回这个字段，
 > 它只在家长确认页出现。
 
-### 4.5 上游 v3 变更（2026-10-29）对后台的影响
+### 4.5 招商审核（2026-10-29 新增，**第一个有页面的模块**）
+
+C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提交**，
+审核和回填后台地址只能在这里做。用户原话：
+
+> 「申请后端会返回后台链接，已经申请后台审核过的 就是直接显示链接。」
+
+| 接口 | 说明 |
+|---|---|
+| `POST /mall/merchant/list` | 申请列表（**待审核的排最前**） |
+| `POST /mall/merchant/review` | 审核：通过 / 拒绝 |
+| `GET /mall/merchant/pending-count` | 待审核数 |
+
+页面：`web/src/view/mall/merchant/index.vue`，
+菜单「商城运营 → 招商审核」（`source/system/menu.go` 已种子）。
+
+**四条不能改的约束**：
+
+1. **通过时 `admin_url` 必填**。C 端那一屏写的是「审核通过后，这里会出现
+   一个后台链接」—— 通过了却不给地址，用户看到「已通过」却永远拿不到入口，
+   只能来问客服。服务层**直接拒绝**这种调用，而不是先落库再指望有人补。
+2. **只允许从 `pending` 改（CAS）**：`WHERE id = ? AND status = 'pending'`，
+   `RowsAffected == 0` 就报「已经审核过了」。先查再写的话，两个人同时点
+   「通过」，后一个会覆盖前一个的 `reviewed_at`，审计上就看不出谁什么时候审的。
+3. **拒绝时把 `admin_url` 清空**。留着它，C 端一旦漏判状态就会把一个
+   「已拒绝」的单子渲染出「打开后台」。
+4. **`updated_at` 必须手动写**。平台模型的 `autoUpdateTime:false`，
+   GORM 不会自动填 —— 漏了会写进 0（1970 年）。
+
+> ⚠️ **`review` 挂了 `OperationRecord`**：它改的是「谁能拿到后台入口」，
+> 出了事要查得到是谁在什么时候点的通过。
+
+> ⚠️ **新接口要注册进 casbin 才会生效**。这次把 3 条同时加进了
+> `source/system/api.go` 与 `source/system/casbin.go` 的**种子**（只对首次
+> `initdb` 生效）。已经初始化过的库仍要走 §3.2 的 `syncApi` + `setApiRoles`，
+> 否则点「通过」返回 `{"code":7,"msg":"权限不足"}` —— 而页面看着完全正常。
+
+### 4.6 上游 v3 变更（2026-10-29）对后台的影响
 
 `kid-quest-farm-2d` 当天把心愿商城的付款规则从「只收券」改成
 **券 + 积分混付**（与「兑换」一字不差），订单上多了 `points_held`。
@@ -312,20 +349,25 @@ curl -X POST http://127.0.0.1:8890/api/enterSyncApi \
 
 ---
 
-## 6. 前端页面（**待补**）
-
-后端接口已完整可用，但**管理界面的 Vue 页面还没写**。
+## 6. 前端页面
 
 上游 gin-vue-admin 的界面是「菜单 → 动态路由 → `web/src/view/<path>`」，
-所以还需要两步：
+所以加一页要两步：**加菜单**（`sys_base_menus`，`component` 指向
+`view/mall/xxx/index.vue`）+ **写页面**。
 
-1. **加菜单**：往 `sys_base_menus` 插入记录，
-   `component` 指向 `view/mall/xxx/index.vue`
-   （可用后台「超级管理员 → 菜单管理」界面手动加，
-   或调 `/menu/addBaseMenu`）
-2. **写页面**：在 `web/src/view/mall/` 下建页面 + `web/src/api/mall/*.js` 封装
+### 6.1 已有页面
 
-### 已预留的菜单建议
+| 菜单 | 页面 | 接口封装 |
+|---|---|---|
+| 商城运营 → 招商审核 | `web/src/view/mall/merchant/index.vue` | `web/src/api/mallMerchant.js` |
+
+这一页的菜单写进了 `source/system/menu.go` 的**种子**，所以**首次 `initdb`
+之后就有了**，不用手动加。已经初始化过的库要自己加一次（或用
+`/menu/addBaseMenu`）。
+
+### 6.2 还没有页面的模块
+
+下面这些后端接口**已经完整可用**，但页面还没写：
 
 | 菜单名 | path | component |
 |---|---|---|
@@ -336,6 +378,10 @@ curl -X POST http://127.0.0.1:8890/api/enterSyncApi \
 | 兑换商城 | `mallRedeem` | `view/mall/redeem/index.vue` |
 | 心愿商城 | `mallWish` | `view/mall/wish/index.vue` |
 | 任务记录 | `mallTask` | `view/mall/task/index.vue` |
+
+> ⚠️ **别照这张表把菜单一次性补齐**。菜单加了但 `component` 指向的
+> `.vue` 不存在时，点进去是**空白页**（前端只报一个 404 chunk），
+> 而人的第一反应是「权限配错了」。**先写页面，再加菜单。**
 
 > 不改前端也能用：这些接口可以用 Postman / curl 直接调，
 > 或者用后端自带的 `/swagger/index.html`（swagger 注释已经写全）。

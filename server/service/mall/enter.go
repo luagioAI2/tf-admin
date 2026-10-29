@@ -27,6 +27,7 @@ type ServiceGroup struct {
 	WishService
 	TaskService
 	DashboardService
+	MerchantService
 }
 
 // txOrDB 取事务句柄（没传事务就用普通 DB）。

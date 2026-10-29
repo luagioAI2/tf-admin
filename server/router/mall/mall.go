@@ -19,6 +19,7 @@ type RouterGroup struct {
 	WishRouter
 	TaskRouter
 	DashboardRouter
+	MerchantRouter
 }
 
 var (
@@ -29,6 +30,7 @@ var (
 	wishApi         = api.ApiGroupApp.MallApiGroup.WishApi
 	taskApi         = api.ApiGroupApp.MallApiGroup.TaskApi
 	dashboardApi    = api.ApiGroupApp.MallApiGroup.DashboardApi
+	merchantApi     = api.ApiGroupApp.MallApiGroup.MerchantApi
 )
 
 // ============================ 游戏与版本 ============================
@@ -143,5 +145,26 @@ func (r *DashboardRouter) InitDashboardRouter(router *gin.RouterGroup) {
 	groupWithoutRecord := router.Group("mall/dashboard")
 	{
 		groupWithoutRecord.GET("overview", dashboardApi.Overview)
+	}
+}
+
+// ============================ 招商 ============================
+
+type MerchantRouter struct{}
+
+// InitMerchantRouter 招商审核路由
+//
+// ⚠️ `review` 必须挂 `middleware.OperationRecord()`：
+// 它改的是「谁能拿到后台入口」—— 出了事要查得到是谁在什么时候点的通过。
+// 列表 / 待办数只是读，不挂。
+func (r *MerchantRouter) InitMerchantRouter(router *gin.RouterGroup) {
+	group := router.Group("mall/merchant").Use(middleware.OperationRecord())
+	groupWithoutRecord := router.Group("mall/merchant")
+	{
+		group.POST("review", merchantApi.Review)
+	}
+	{
+		groupWithoutRecord.POST("list", merchantApi.List)
+		groupWithoutRecord.GET("pending-count", merchantApi.PendingCount)
 	}
 }

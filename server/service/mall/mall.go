@@ -2,6 +2,7 @@ package mall
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
@@ -283,6 +284,129 @@ func (s *DashboardService) Overview(ctx context.Context, days int) (map[string]i
 		"wish_pending_wished": pendingWished,
 		"wish_pending_action": pendingAction,
 	}, nil
+}
+
+// ============================ 招商 ============================
+
+// MerchantService 招商申请审核。
+//
+// 这一屏是**唯一**能把申请推到 `approved` 的地方 —— C 端不许自己改状态
+// （改了就等于给所有用户凭空发一个后台入口）。
+type MerchantService struct{}
+
+// List 申请列表。
+//
+// 排序：**待审核的永远在最前面**，同档按 id 倒序（新的在上）。
+// 运营打开这一页就是为了处理待办，让他自己翻页去找 pending 等于白做一屏。
+func (s *MerchantService) List(ctx context.Context, info request.MerchantSearch) (list []mall.MerchantApplication, total int64, err error) {
+	db := global.GVA_DB.WithContext(ctx).Model(&mall.MerchantApplication{})
+	if info.Role != "" {
+		db = db.Where("role = ?", info.Role)
+	}
+	if info.Status != "" {
+		db = db.Where("status = ?", info.Status)
+	}
+	if info.Keyword != "" {
+		// 名字 / 联系方式 / 备注 一起搜 —— 运营手上通常只有其中一样
+		like := "%" + info.Keyword + "%"
+		db = db.Where("name LIKE ? OR contact LIKE ? OR note LIKE ?", like, like, like)
+	}
+	if err = db.Count(&total).Error; err != nil {
+		return
+	}
+	if info.PageSize == 0 {
+		info.PageSize = 20
+	}
+	err = db.Order("CASE WHEN status = 'pending' THEN 0 ELSE 1 END, id DESC").
+		Scopes(paginate(info.Page, info.PageSize)).Find(&list).Error
+	return
+}
+
+// Review 审核（通过 / 拒绝）。
+//
+// ## 通过时 AdminURL 必填
+//
+// C 端那一屏写的是「审核通过后，这里会出现一个后台链接」。
+// 通过了却不给地址 ⇒ 用户看到「已通过」但永远拿不到入口。
+// 所以这里**先拒绝这种调用**，而不是先落库再指望有人补。
+//
+// ## 只允许从 pending 改（CAS）
+//
+// 用 `WHERE status = 'pending'` 做条件更新，`RowsAffected == 0` 就报
+// 「已经审核过了」。不用先查再写：两个人同时点「通过」，后一个会覆盖前一个的
+// `reviewed_at`，审计上就看不出谁什么时候审的。
+func (s *MerchantService) Review(
+	ctx context.Context,
+	req request.ReviewMerchantReq,
+	operatorID uint,
+	operatorName string,
+) error {
+	target := "approved"
+	if !req.Approve {
+		target = "rejected"
+	}
+	adminURL := strings.TrimSpace(req.AdminURL)
+	if req.Approve {
+		if adminURL == "" {
+			return errInvalid("通过审核必须填后台地址，否则对方拿不到入口")
+		}
+		// 格式检查放这里而不是 `binding:"url"`：校验器的报错是英文的
+		// `Key: 'ReviewMerchantReq.AdminURL' ...`，运营看不懂。
+		if !strings.HasPrefix(adminURL, "http://") && !strings.HasPrefix(adminURL, "https://") {
+			return errInvalid("后台地址要以 http:// 或 https:// 开头")
+		}
+	} else {
+		// 拒绝不该留下上一次通过时写的地址 —— 留着它，C 端一旦漏判状态
+		// 就会把一个「已拒绝」的单子渲染出「打开后台」。
+		adminURL = ""
+	}
+
+	note := strings.TrimSpace(req.Note)
+	if operatorName != "" {
+		// 备注里带上操作人，省得以后翻 sys_operation_records 才知道是谁
+		note = strings.TrimSpace(note + " @" + operatorName)
+	}
+
+	// 一次取时间：`reviewed_at` 与 `updated_at` 差一秒的话，
+	// 审计上会出现「更新早于审核」这种看不懂的记录
+	now := nowUnix()
+	fields := map[string]interface{}{
+		"status":      target,
+		"admin_url":   adminURL,
+		"review_note": note,
+		"reviewed_at": now,
+		"reviewed_by": operatorID,
+		// ⚠️ 模型的 `autoUpdateTime:false` ⇒ 必须手动写，否则 updated_at 停在 0
+		"updated_at": now,
+	}
+
+	res := global.GVA_DB.WithContext(ctx).Model(&mall.MerchantApplication{}).
+		Where("id = ? AND status = ?", req.ID, "pending").
+		Updates(fields)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		// 区分「不存在」和「已审过」—— 两种原因对运营是两件事
+		var n int64
+		if err := global.GVA_DB.WithContext(ctx).Model(&mall.MerchantApplication{}).
+			Where("id = ?", req.ID).Count(&n).Error; err != nil {
+			return err
+		}
+		if n == 0 {
+			return errInvalid("这条申请不存在（可能已经被删了）")
+		}
+		return errInvalid("这条申请已经审核过了，刷新看看最新状态")
+	}
+	return nil
+}
+
+// PendingCount 待审核数（菜单红点）
+func (s *MerchantService) PendingCount(ctx context.Context) (int64, error) {
+	var n int64
+	err := global.GVA_DB.WithContext(ctx).Model(&mall.MerchantApplication{}).
+		Where("status = ?", "pending").Count(&n).Error
+	return n, err
 }
 
 // errInvalid 简单业务错误

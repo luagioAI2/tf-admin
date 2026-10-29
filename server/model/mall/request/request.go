@@ -163,3 +163,33 @@ type DashboardReq struct {
 	// Days 统计最近几天（默认 7）
 	Days int `json:"days" form:"days"`
 }
+
+// ============================ 招商 ============================
+
+// MerchantSearch 招商申请查询
+type MerchantSearch struct {
+	request.PageInfo
+	Role    string `json:"role" form:"role"`
+	Status  string `json:"status" form:"status"`
+	Keyword string `json:"keyword" form:"keyword"`
+}
+
+// ReviewMerchantReq 审核一条申请。
+//
+// ⚠️ **通过时必须给 `admin_url`**：C 端那一屏写的是
+// 「审核通过后，这里会出现一个后台链接」。通过了却不给地址，
+// 用户看到「已通过」却永远拿不到入口，只能来问客服。
+// 服务层会直接拒绝这种调用，而不是先落库再说。
+type ReviewMerchantReq struct {
+	ID uint `json:"id" binding:"required"`
+	// Approve true = 通过，false = 拒绝
+	Approve bool `json:"approve"`
+	// AdminURL 通过时必填（给对方的后台入口）
+	//
+	// ⚠️ 这里**不用** `binding:"url"` —— 它的报错是
+	// `Key: 'ReviewMerchantReq.AdminURL' Error:Field validation for ... failed`，
+	// 运营看不懂。格式检查放在 service 里，报「要以 http:// 或 https:// 开头」。
+	AdminURL string `json:"admin_url" binding:"omitempty,max=512"`
+	// Note 审核备注 / 拒绝原因（拒绝时会被 C 端显示出来）
+	Note string `json:"note" binding:"omitempty,max=255"`
+}

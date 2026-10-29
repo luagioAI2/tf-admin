@@ -311,3 +311,35 @@ type TaskInstance struct {
 }
 
 func (TaskInstance) TableName() string { return "task_instance" }
+
+// ============================ 招商 ============================
+
+// MerchantApplication 招商申请（对应 `merchant_application` 表）
+//
+// C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提交**，
+// 审核和 `AdminURL` 回填只能在这里做。用户原话：
+//
+//	「申请后端会返回后台链接，已经申请后台审核过的 就是直接显示链接」
+//
+// ⚠️ 唯一索引在 **`(uid, role)`**（`uk_merchant_uid_role`）：
+// 同一角色重复提交是**改申请**，不是提第二份。所以后台这一侧
+// **不要**做成「新增一条」，只做「改这一条的状态」。
+type MerchantApplication struct {
+	BaseModel
+
+	UID    uint   `gorm:"column:uid" json:"uid"`
+	Role   string `gorm:"column:role" json:"role"`
+	Status string `gorm:"column:status" json:"status"`
+	// Name 家长昵称 / 店铺名（**服务端从账号补的**，不是用户填的）
+	Name string `gorm:"column:name" json:"name"`
+	// Contact 手机号或微信（同上，手机号是明文，C 端拿到的是脱敏的）
+	Contact string `gorm:"column:contact" json:"contact"`
+	Note    string `gorm:"column:note" json:"note"`
+	// AdminURL 通过时回填的后台地址。**只有 approved 时 C 端才看得到**
+	AdminURL   string `gorm:"column:admin_url" json:"admin_url"`
+	ReviewedAt int64  `gorm:"column:reviewed_at" json:"reviewed_at"`
+	ReviewedBy uint   `gorm:"column:reviewed_by" json:"reviewed_by"`
+	ReviewNote string `gorm:"column:review_note" json:"review_note"`
+}
+
+func (MerchantApplication) TableName() string { return "merchant_application" }

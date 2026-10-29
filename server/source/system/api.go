@@ -260,6 +260,15 @@ func (i *initApi) InitializeData(ctx context.Context) (context.Context, error) {
 		{ApiGroup: "版本控制", Method: "POST", Path: "/sysVersion/importVersion", Description: "同步版本"},
 		{ApiGroup: "版本控制", Method: "DELETE", Path: "/sysVersion/deleteSysVersion", Description: "删除版本"},
 		{ApiGroup: "版本控制", Method: "DELETE", Path: "/sysVersion/deleteSysVersionByIds", Description: "批量删除版本"},
+
+		// ===== 招商（mall 模块）=====
+		//
+		// ⚠️ 这份种子只在**首次 initdb** 时生效。已经初始化过的库要靠
+		// `GET /api/syncApi` + `POST /api/enterSyncApi` 补（见 README-TF §3.2），
+		// 否则接口返回 `{"code":7,"msg":"权限不足"}` —— 而页面看着完全正常。
+		{ApiGroup: "招商", Method: "POST", Path: "/mall/merchant/list", Description: "招商申请列表"},
+		{ApiGroup: "招商", Method: "POST", Path: "/mall/merchant/review", Description: "审核招商申请"},
+		{ApiGroup: "招商", Method: "GET", Path: "/mall/merchant/pending-count", Description: "待审核数"},
 	}
 	if err := db.Create(&entities).Error; err != nil {
 		return ctx, errors.Wrap(err, sysModel.SysApi{}.TableName()+"表数据初始化失败!")

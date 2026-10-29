@@ -16,6 +16,7 @@ type ApiGroup struct {
 	WishApi
 	TaskApi
 	DashboardApi
+	MerchantApi
 }
 
 // 从 ServiceGroupApp 取 Service 实例（gin-vue-admin 的约定：
@@ -28,4 +29,5 @@ var (
 	wishService         = service.ServiceGroupApp.MallServiceGroup.WishService
 	taskService         = service.ServiceGroupApp.MallServiceGroup.TaskService
 	dashboardService    = service.ServiceGroupApp.MallServiceGroup.DashboardService
+	merchantService     = service.ServiceGroupApp.MallServiceGroup.MerchantService
 )

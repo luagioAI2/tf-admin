@@ -365,6 +365,14 @@ func (i *initCasbin) InitializeData(ctx context.Context) (context.Context, error
 		{Ptype: "p", V0: "9528", V1: "/autoCode/deleteAIWorkflowSession", V2: "POST"},
 		{Ptype: "p", V0: "9528", V1: "/autoCode/dumpAIWorkflowMarkdown", V2: "POST"},
 		{Ptype: "p", V0: "9528", V1: "/user/getUserInfo", V2: "GET"},
+
+		// ===== 招商（mall 模块）：给超级管理员 888 =====
+		//
+		// ⚠️ 只写 api 种子不够 —— casbin 才是真正拦请求的那一层。
+		// 少了这几条，页面上点「通过」会返回 `{"code":7,"msg":"权限不足"}`。
+		{Ptype: "p", V0: "888", V1: "/mall/merchant/list", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/merchant/review", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/merchant/pending-count", V2: "GET"},
 	}
 	if err := db.Create(&entities).Error; err != nil {
 		return ctx, errors.Wrap(err, "Casbin 表 ("+i.InitializerName()+") 数据初始化失败!")

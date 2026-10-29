@@ -504,3 +504,77 @@ func (a *DashboardApi) Overview(c *gin.Context) {
 	}
 	response.OkWithData(data, c)
 }
+
+// ============================ 招商 ============================
+
+type MerchantApi struct{}
+
+// List 招商申请列表
+// @Tags     MallMerchant
+// @Summary  招商申请列表（待审核的排最前）
+// @Produce  application/json
+// @Param    data  body      mallReq.MerchantSearch                        true  "分页与筛选"
+// @Success  200   {object}  response.Response{data=response.PageResult}   "申请列表"
+// @Router   /mall/merchant/list [post]
+func (a *MerchantApi) List(c *gin.Context) {
+	var info mallReq.MerchantSearch
+	if err := c.ShouldBindJSON(&info); err != nil {
+		response.FailWithMessage(err.Error(), c)
+		return
+	}
+	list, total, err := merchantService.List(c.Request.Context(), info)
+	if err != nil {
+		global.GVA_LOG.Error("获取招商申请失败", zap.Error(err))
+		response.FailWithMessage("获取失败："+err.Error(), c)
+		return
+	}
+	response.OkWithDetailed(response.PageResult{
+		List: list, Total: total, Page: info.Page, PageSize: info.PageSize,
+	}, "获取成功", c)
+}
+
+// Review 审核一条招商申请
+// @Tags     MallMerchant
+// @Summary  审核招商申请（通过时 admin_url 必填）
+// @Produce  application/json
+// @Param    data  body      mallReq.ReviewMerchantReq  true  "审核参数"
+// @Success  200   {object}  response.Response{}        "审核结果"
+// @Router   /mall/merchant/review [post]
+func (a *MerchantApi) Review(c *gin.Context) {
+	var req mallReq.ReviewMerchantReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.FailWithMessage(err.Error(), c)
+		return
+	}
+	operator := utils.GetUserName(c)
+	if operator == "" {
+		operator = "admin"
+	}
+	if err := merchantService.Review(c.Request.Context(), req, utils.GetUserID(c), operator); err != nil {
+		// 业务错误（没填地址 / 已经审过）不是系统故障，别刷 ERROR 日志
+		global.GVA_LOG.Warn("审核招商申请失败",
+			zap.Uint("id", req.ID), zap.Bool("approve", req.Approve), zap.Error(err))
+		response.FailWithMessage(err.Error(), c)
+		return
+	}
+	global.GVA_LOG.Info("招商申请已审核",
+		zap.Uint("id", req.ID),
+		zap.Bool("approve", req.Approve),
+		zap.String("operator", operator))
+	response.OkWithMessage("审核完成", c)
+}
+
+// PendingCount 待审核数
+// @Tags     MallMerchant
+// @Summary  待审核数（菜单红点）
+// @Produce  application/json
+// @Success  200   {object}  response.Response{data=int64}  "待审核数"
+// @Router   /mall/merchant/pending-count [get]
+func (a *MerchantApi) PendingCount(c *gin.Context) {
+	n, err := merchantService.PendingCount(c.Request.Context())
+	if err != nil {
+		response.FailWithMessage("获取失败："+err.Error(), c)
+		return
+	}
+	response.OkWithData(n, c)
+}

@@ -62,6 +62,12 @@ func (i *initMenu) InitializeData(ctx context.Context) (next context.Context, er
 		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "https://www.gin-vue-admin.com", Name: "https://www.gin-vue-admin.com", Component: "/", Sort: 0, Meta: Meta{Title: "官方网站", Icon: "customer-gva"}},
 		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "state", Name: "state", Component: "view/system/state.vue", Sort: 8, Meta: Meta{Title: "服务器状态", Icon: "cloudy"}},
 		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "plugin", Name: "plugin", Component: "view/routerHolder.vue", Sort: 6, Meta: Meta{Title: "插件系统", Icon: "cherry"}},
+		// 商城运营（mall 模块的页面都挂在这下面）。
+		//
+		// ⚠️ 后端 `server/router/mall` 有 7 个路由组，但**页面目前只有招商审核
+		// 这一页**。别照着路由组把菜单补齐 —— 点进去是空白页（组件不存在时
+		// gin-vue-admin 只报一个 404 chunk，看着像「权限不足」）。
+		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "mall", Name: "mall", Component: "view/routerHolder.vue", Sort: 2, Meta: Meta{Title: "商城运营", Icon: "shop"}},
 	}
 
 	// 先创建父级菜单（ParentId = 0 的菜单）
@@ -114,6 +120,9 @@ func (i *initMenu) InitializeData(ctx context.Context) (next context.Context, er
 		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["plugin"], Path: "pubPlug", Name: "pubPlug", Component: "view/systemTools/pubPlug/pubPlug.vue", Sort: 3, Meta: Meta{Title: "打包插件", Icon: "files"}},
 		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["plugin"], Path: "plugin-email", Name: "plugin-email", Component: "plugin/email/view/index.vue", Sort: 4, Meta: Meta{Title: "邮件插件", Icon: "message"}},
 		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["plugin"], Path: "anInfo", Name: "anInfo", Component: "plugin/announcement/view/info.vue", Sort: 5, Meta: Meta{Title: "公告管理[示例]", Icon: "scaleToOriginal"}},
+
+		// mall子菜单
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["mall"], Path: "merchant", Name: "merchant", Component: "view/mall/merchant/index.vue", Sort: 1, Meta: Meta{Title: "招商审核", Icon: "message"}},
 	}
 
 	// 创建子菜单
