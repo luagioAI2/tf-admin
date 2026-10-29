@@ -254,6 +254,12 @@ type WishOrder struct {
 	VoucherPrice int64  `gorm:"column:voucher_price" json:"voucher_price"`
 	Status       string `gorm:"column:status" json:"status"`
 	VouchersHeld int64  `gorm:"column:vouchers_held" json:"vouchers_held"`
+	// PointsHeld 这一单实际扣掉的**积分**。
+	//
+	// 2026-10-29 起心愿商城可券 + 积分混付（和「兑换」同一套规则），
+	// 所以订单上多了这个字段。它和 `VouchersHeld` 是**退款凭据的两半**，
+	// 缺一不可 —— 一笔成交扣两种币，退款只退一种的话另一半就凭空蒸发了。
+	PointsHeld   int64  `gorm:"column:points_held" json:"points_held"`
 	OpenedGameID string `gorm:"column:opened_game_id" json:"opened_game_id"`
 	TrackingNo   string `gorm:"column:tracking_no" json:"tracking_no"`
 	// Ship 收货信息（**敏感**：后台只在有权限时展示，见 service 层）
