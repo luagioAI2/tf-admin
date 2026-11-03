@@ -52,7 +52,11 @@
       </div>
       <el-table :data="tableData" style="width: 100%" row-key="id">
         <el-table-column align="left" label="ID" prop="id" width="70" />
-        <el-table-column align="left" label="头像" width="70">
+        <!-- 列宽是**量出来的**，不是拍的：容器 clientW=1140，
+             11 列固定宽合计必须 ≤1022，剩下给「昵称」这个 flex 列，
+             否则总宽超过容器 ⇒ 固定右列压住「注册时间」的右边。
+             实测头像 emoji 20px、手机号 11 位等宽数字 ≈86px，都能再收。 -->
+        <el-table-column align="left" label="头像" width="64">
           <template #default="scope">
             <span class="avatar">{{ scope.row.avatar || '👤' }}</span>
           </template>
@@ -65,7 +69,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column align="left" label="手机号" width="140">
+        <el-table-column align="left" label="手机号" width="128">
           <template #default="scope">
             <!-- 这里是**明文**手机号。C 端只显示 138****8000，
                  明文只给有权限的运营看，别复制到工单 / 群里。 -->
