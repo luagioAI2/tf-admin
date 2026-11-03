@@ -58,3 +58,6 @@ web/src/pathInfo.json
 # python 缓存（scripts/ 里的小工具会生成）
 __pycache__/
 *.pyc
+
+# 探针的截图 / 临时产物
+.e2e-scratch/

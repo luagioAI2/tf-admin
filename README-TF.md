@@ -173,11 +173,30 @@ curl -X POST http://127.0.0.1:8890/api/enterSyncApi \
 #    接口：POST /api/setApiRoles  {"path":"...","method":"...","authorityIds":[888]}
 ```
 
-> ⚠️ **两个容易踩的坑**：
+> ⚠️ **三个容易踩的坑**：
 > 1. `syncApi` 是 **GET**；用 POST 会 404（而且不报「方法不对」，就是 404）
 > 2. `syncApi` **只是预览差异，不会落库**；真正落库要再调 `enterSyncApi`
+> 3. 落库之后 casbin **还在用旧策略**（进程启动时加载的）⇒ 必须
+>    `GET /api/freshCasbin` 或重启后台。不然「库里有行、请求还是 403」，
+>    看着像写错了表。
 >
 > 不注册的症状：接口返回 `{"code":7,"msg":"权限不足"}`。
+
+#### 离线批量补齐（拿不到管理员密码 / 想放进部署流程）
+
+```bash
+python scripts/seed-mall.py            # 22 个 mall 接口 → sys_apis + casbin_rule（幂等）
+python scripts/seed-mall.py --dry-run  # 只看要做什么
+python scripts/check-mall-perms.py     # 逐个体检：哪个接口还是「权限不足」
+```
+
+**2026-11-03 实测：14 个接口只有 3 个通**（`user/list`、`merchant/list`、
+`merchant/pending-count`），其余全是「权限不足」—— 而页面看着完全正常，
+点下去才发现。**新加接口之后一定要跑一遍 `check-mall-perms.py`。**
+
+> ⚠️ `code=7` **不等于**「权限不足」：参数校验失败也返回 `code=7`
+> （`{"code":7,"msg":"Key: 'UpdateGameReq.GameID' Error:Field validation…"}`）。
+> 判据要看 **`msg`**，只看 code 会把「参数没填」当成「没授权」。
 
 ### 3.3 默认账号
 
@@ -359,6 +378,8 @@ C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提
 
 | 菜单 | 页面 | 接口封装 |
 |---|---|---|
+| 商城运营 → 经营看板 | `web/src/view/mall/dashboard/index.vue` | `web/src/api/mallDashboard.js` |
+| 商城运营 → App 用户 | `web/src/view/mall/user/index.vue` | `web/src/api/tfUser.js` |
 | 商城运营 → 招商审核 | `web/src/view/mall/merchant/index.vue` | `web/src/api/mallMerchant.js` |
 
 这一页的菜单写进了 `source/system/menu.go` 的**种子**，所以**首次 `initdb`
@@ -371,7 +392,6 @@ C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提
 
 | 菜单名 | path | component |
 |---|---|---|
-| 经营看板 | `mallDashboard` | `view/mall/dashboard/index.vue` |
 | 游戏管理 | `mallGame` | `view/mall/game/index.vue` |
 | 游戏版本 | `mallRelease` | `view/mall/release/index.vue` |
 | 平台用户 | `mallUser` | `view/mall/user/index.vue` |
@@ -385,6 +405,16 @@ C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提
 
 > 不改前端也能用：这些接口可以用 Postman / curl 直接调，
 > 或者用后端自带的 `/swagger/index.html`（swagger 注释已经写全）。
+
+#### 加一页的完整顺序（四步，别跳）
+
+1. 写 `web/src/view/mall/<x>/index.vue` + `web/src/api/mallXxx.js`
+2. `python scripts/seed-mall.py` —— 接口登记 + casbin（否则第一屏就 403）
+3. `python scripts/seed-menu.py --only <menuName>` —— 菜单 + 菜单授权
+4. `node scripts/_probe-dashboard.mjs` 那套探针改成对应的页面，跑一遍
+
+`seed-menu.py` 里那张 `PAGES` 表**会先看 `.vue` 在不在**，不在就跳过 ——
+所以可以提前把还没写的页面列进去，它不会建出「点进去空白」的菜单。
 
 ---
 
