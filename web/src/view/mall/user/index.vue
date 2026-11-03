@@ -194,6 +194,12 @@
         </div>
       </div>
       <template #footer>
+        <!-- 放详情里而不是列表的操作列：那一列已经 175px 刚好一行，
+             再塞一个按钮就会折成两行（看着像布局坏了）。
+             而且重置密码要先看清楚是谁，本来就得先开详情。 -->
+        <el-button type="danger" plain data-reset-open style="float: left" @click="openReset">
+          重置登录密码
+        </el-button>
         <el-button @click="detailVisible = false">关闭</el-button>
       </template>
     </el-dialog>
@@ -239,6 +245,51 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 重置登录密码 -->
+    <el-dialog v-model="resetVisible" title="重置登录密码" width="520px" @closed="resetReset">
+      <el-alert type="warning" :closable="false" show-icon style="margin-bottom: 12px">
+        <template #title>
+          服务端生成一个新密码，<b>只显示这一次</b>（库里只存哈希，关掉就查不到了）。
+          重置后这个账号<b>所有设备的登录都会失效</b>，用户得用新密码重新登录。
+        </template>
+      </el-alert>
+
+      <el-form v-if="!resetResult" :model="resetForm" label-width="90px">
+        <el-form-item label="用户">
+          <span>#{{ resetForm.uid }} · {{ resetForm.nickname || '—' }}</span>
+        </el-form-item>
+        <el-form-item label="备注" required>
+          <el-input
+            v-model="resetForm.memo"
+            data-reset-memo
+            type="textarea"
+            :rows="2"
+            maxlength="128"
+            show-word-limit
+            placeholder="例：工单 #1234 家长忘了密码"
+          />
+        </el-form-item>
+      </el-form>
+
+      <div v-else class="pwd-box">
+        <div class="pwd-hint">新密码（抄下来 / 念给用户，关掉就看不到了）</div>
+        <div class="pwd" data-reset-password>{{ resetResult }}</div>
+        <el-button size="small" data-reset-copy @click="copyPwd">复制</el-button>
+      </div>
+
+      <template #footer>
+        <template v-if="!resetResult">
+          <el-button @click="resetVisible = false">取消</el-button>
+          <el-button type="danger" :loading="resetting" data-reset-submit @click="submitReset">
+            确认重置
+          </el-button>
+        </template>
+        <el-button v-else type="primary" data-reset-done @click="resetVisible = false">
+          我记下了
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -249,7 +300,8 @@
     adjustPlatformUserBalance,
     getPlatformUserDetail,
     getPlatformUserLedger,
-    getPlatformUserList
+    getPlatformUserList,
+    resetPlatformUserPassword
   } from '@/api/tfUser'
   import { formatDate } from '@/utils/format'
 
@@ -268,6 +320,14 @@
   const adjustVisible = ref(false)
   const submitting = ref(false)
   const adjustForm = ref({ uid: 0, nickname: '', currency: 'points', delta: 0, memo: '' })
+
+  /* 重置登录密码。
+     `resetResult` 有值 = 已经重置成功，弹窗切成「显示新密码」那一面。
+     ⚠️ 它只在内存里：关掉弹窗（`resetReset`）就清空，再也不显示。 */
+  const resetVisible = ref(false)
+  const resetting = ref(false)
+  const resetResult = ref('')
+  const resetForm = ref({ uid: 0, nickname: '', memo: '' })
 
   /** 0 禁用 / 1 正常 / 2 封禁（`entities.User` 里的常量） */
   const STATUS_TEXT = { 0: '禁用', 1: '正常', 2: '封禁' }
@@ -414,6 +474,59 @@
     }
   }
 
+  const openReset = () => {
+    const u = detail.value.user
+    if (!u) return
+    resetForm.value = { uid: u.id, nickname: u.nickname, memo: '' }
+    resetResult.value = ''
+    resetVisible.value = true
+  }
+  const resetReset = () => {
+    resetForm.value = { uid: 0, nickname: '', memo: '' }
+    resetResult.value = ''
+    resetting.value = false
+  }
+
+  const submitReset = async () => {
+    const f = resetForm.value
+    // 服务端也拒，但让人等一个来回才知道「少了什么」是没必要的
+    if (!f.memo.trim()) {
+      ElMessage.warning('备注必须填：将来查「密码怎么被改过」只能靠它')
+      return
+    }
+    try {
+      await ElMessageBox.confirm(
+        `确认重置 #${f.uid} 的登录密码？这会让他在所有设备上掉线。`,
+        '确认重置',
+        { type: 'warning' }
+      )
+    } catch {
+      return // 点了取消
+    }
+    resetting.value = true
+    try {
+      const res = await resetPlatformUserPassword({ uid: f.uid, memo: f.memo.trim() })
+      if (res.code === 0) {
+        /* ⚠️ 空密码要**说出来**：界面会停在空白框上，看着像「什么都没发生」，
+           而实际上密码已经被改掉了 —— 那时用户手里还是旧密码。 */
+        resetResult.value = res.data?.password ?? ''
+        if (!resetResult.value) ElMessage.warning('接口没返回新密码，请再重置一次')
+      }
+      // 失败（游客 / 没手机号 / 无权限）由 request 拦截器弹 msg，这里不用重复
+    } finally {
+      resetting.value = false
+    }
+  }
+
+  const copyPwd = async () => {
+    try {
+      await navigator.clipboard.writeText(resetResult.value)
+      ElMessage.success('已复制')
+    } catch {
+      ElMessage.warning('复制失败，请手动抄写')
+    }
+  }
+
   const currencyText = (v) =>
     ({ points: '积分', coupon: '兑换券', diamond: '钻石' })[v] ?? v
 
@@ -468,5 +581,25 @@
     margin-left: 8px;
     color: var(--el-text-color-secondary);
     font-size: 12px;
+  }
+  .pwd-box {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .pwd-hint {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
+  /* 要念得清、抄得对：等宽 + 大字号 + 字间距 */
+  .pwd {
+    padding: 10px 14px;
+    border-radius: 6px;
+    background: var(--el-fill-color-light);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 22px;
+    letter-spacing: 2px;
+    user-select: all;
   }
 </style>

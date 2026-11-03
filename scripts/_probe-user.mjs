@@ -39,22 +39,51 @@ if (listApi.code !== 0) {
   console.error('用户列表接口不通：', listApi.msg)
   process.exit(2)
 }
-const apiUsers = listApi.data.list ?? []
+/* ★ 这两个会被「定位目标」那一步改写成**筛选后**的口径，
+   所以用 let：断言比的必须是「界面此刻显示的这一份」，不是第一次拉的那份。 */
+let apiUsers = listApi.data.list ?? []
+let expectTotal = listApi.data.total
 if (!apiUsers.length) {
   console.error('库里一个用户都没有')
   process.exit(2)
 }
 
-/* 挑一个**账本最厚**的（页面上都看得见），这样「账实相符」不是空对空 */
-const ledgers = await Promise.all(
-  apiUsers.map((u) =>
-    adminGet(`/mall/user/ledger?id=${u.id}&page=1&pageSize=1`).then((r) => r.data?.total ?? 0)
-  )
+/* ---------- 挑目标账号 ----------
+ *
+ * ★★ 2026-11-03 改。原来只在前 10 行里挑「账本最厚的」，而**游客账号会把
+ *   第一页顶满**（0 分 0 流水，id 最大所以排最前）—— 于是「最厚的」变成了
+ *   「第一个游客」，⑦ 去等一条永远不来的流水，20s 后报「探针中断」，
+ *   一个字线索都没有，只能靠人肉看图。数据会变，判据不能跟着变。
+ *
+ * 现在：一次 pageSize=100 把库拉下来，按钱包从厚到薄试（最多 3 个），
+ *   第一个真有流水的就是目标。为什么按钱包排序而不是逐个查账本：
+ *   钱包有钱 ⇒ 几乎一定有流水，这样最多 3 次请求；40 个账号逐个查会撞上
+ *   后台频率限制，红成「too many requests」，同样没有线索。
+ */
+const allUsers = (await adminApi('/mall/user/list', { page: 1, pageSize: 100 })).data.list ?? []
+const byWallet = [...allUsers].sort(
+  (a, b) => b.points + b.coupon + b.diamond - (a.points + a.coupon + a.diamond)
 )
-const richestIdx = ledgers.indexOf(Math.max(...ledgers))
-const target = apiUsers[richestIdx]
+let target = null
+let targetLedger = 0
+for (const u of byWallet.slice(0, 3)) {
+  const total = (await adminGet(`/mall/user/ledger?id=${u.id}&page=1&pageSize=1`)).data?.total ?? 0
+  if (total > 0) {
+    target = u
+    targetLedger = total
+    break
+  }
+}
+if (!target) {
+  console.error(
+    '库里有账号，但「钱包最厚」的前 3 个都没有任何流水 —— ⑦「账实相符」没法验。\n' +
+      '要么库被清过，要么余额和账本已经脱节了（后者正是这条探针要抓的东西）。'
+  )
+  process.exit(2)
+}
 console.log(
-  `接口共 ${listApi.data.total} 个账号；挑账本最厚的：#${target.id} ${target.nickname}（${ledgers[richestIdx]} 条流水）\n`
+  `接口共 ${listApi.data.total} 个账号；目标：#${target.id} ${target.nickname}` +
+    `（${targetLedger} 条流水，${target.points}/${target.coupon}/${target.diamond}）\n`
 )
 
 const detailApi = await adminGet(`/mall/user/detail?id=${target.id}`)
@@ -73,14 +102,20 @@ const readRows = () =>
     )
   })
 
-/** 点某一行里的某个按钮（按行内文字定位，别点第一行 —— 目标不一定在第一行） */
-const clickInRow = async (rowText, btnText) => {
+/**
+ * 点某一行里的某个按钮。
+ *
+ * ★ 按**第一列（ID）精确匹配**，不按昵称：游客全叫「小客人」，按昵称会点到
+ *   别人身上 —— 而那条断言（详情里的钱包 == 接口）照样能过，因为两个人
+ *   钱包都是 0。这种「点错了还全绿」最难发现。
+ */
+const clickInRow = async (id, btnText) => {
   const hit = await page.evaluate(
-    (t, b) => {
+    (uid, b) => {
       const tb = [...document.querySelectorAll('.el-table')].find((x) => x.offsetParent !== null)
       if (!tb) return null
-      const tr = [...tb.querySelectorAll('tbody tr.el-table__row')].find((r) =>
-        (r.innerText || '').includes(t)
+      const tr = [...tb.querySelectorAll('tbody tr.el-table__row')].find(
+        (r) => (r.querySelector('td')?.innerText || '').trim() === String(uid)
       )
       if (!tr) return null
       const btn = [...tr.querySelectorAll('button')].find((x) => (x.innerText || '').includes(b))
@@ -89,10 +124,10 @@ const clickInRow = async (rowText, btnText) => {
       if (!r.width) return null
       return { cx: Math.round(r.x + r.width / 2), cy: Math.round(r.y + r.height / 2) }
     },
-    rowText,
+    id,
     btnText
   )
-  if (!hit) throw new Error(`找不到「${rowText}」那一行的「${btnText}」`)
+  if (!hit) throw new Error(`找不到 #${id} 那一行的「${btnText}」`)
   await page.mouse.click(hit.cx, hit.cy)
 }
 
@@ -157,17 +192,64 @@ try {
   /* ============ ④ 列表数字 == 接口 ============ */
   console.log('\n④ 列表')
   let rows = await readRows()
+
+  /* ---------- ③.5 把目标账号弄到眼前 ----------
+   *
+   * 目标不一定在第一页（游客账号会把第一页顶满，见文件头「挑目标」的注释）。
+   * 这时用「手机号」筛选把它单独查出来 —— **不能按昵称筛**：游客全叫
+   * 「小客人」，筛出来一堆，点「详情」会点到别人身上。
+   *
+   * 筛完必须把接口口径一起换成筛选后的那份，否则 ④ 会拿「1 行 vs 10 行」
+   * 去比，红成「列表行数对不上」，看着像分页坏了。
+   */
+  if (!rows.some((r) => num(r[0]) === target.id)) {
+    if (!target.mobile) {
+      throw new Error(
+        `目标 #${target.id}（${target.nickname}）不在第一页，又没有手机号，筛不出来 —— ` +
+          `库里「有钱且有流水」的账号都在深页了，需要有人看一眼数据`
+      )
+    }
+    const box = await page.evaluateHandle(() => {
+      const item = [...document.querySelectorAll('.el-form-item')].find((f) =>
+        (f.innerText || '').trim().startsWith('手机号')
+      )
+      return item?.querySelector('input') ?? null
+    })
+    const el = box.asElement()
+    if (!el) throw new Error('找不到「手机号」筛选框')
+    await el.click()
+    await page.keyboard.type(target.mobile)
+    await a.clickByText('查询')
+    await page.waitForFunction(
+      (m) => {
+        const trs = [...document.querySelectorAll('tbody tr.el-table__row')]
+        return trs.length > 0 && trs.some((tr) => (tr.innerText || '').includes(m))
+      },
+      { timeout: 20000 },
+      target.mobile
+    )
+    console.log(`  （目标不在第一页，已用手机号 ${target.mobile} 筛出来）`)
+    const filtered = await adminApi('/mall/user/list', {
+      page: 1,
+      pageSize: 10,
+      mobile: target.mobile
+    })
+    apiUsers = filtered.data.list ?? []
+    expectTotal = filtered.data.total
+    rows = await readRows()
+  }
+
   ok('列表行数 == 接口这一页的条数', rows.length === apiUsers.length, `${rows.length} / ${apiUsers.length}`)
   ok(
     '★ 「共 N 个账号」= 接口 total',
     num((await page.evaluate(() => document.body.innerText)).match(/共\s*(\d+)\s*个账号/)?.[1]) ===
-      listApi.data.total,
-    `界面 ${(await page.evaluate(() => document.body.innerText)).match(/共\s*\d+\s*个账号/)?.[0]} / 接口 ${listApi.data.total}`
+      expectTotal,
+    `界面 ${(await page.evaluate(() => document.body.innerText)).match(/共\s*\d+\s*个账号/)?.[0]} / 接口 ${expectTotal}`
   )
 
   /* 列顺序：ID / 头像 / 昵称 / 手机号 / 状态 / 积分 / 兑换券 / 钻石 / 家长密码 / 注册时间 / 操作 */
-  const tRow = rows.find((r) => (r[2] ?? '').includes(target.nickname)) ?? rows[richestIdx]
-  ok('★ 找得到目标用户那一行', (tRow?.[2] ?? '').includes(target.nickname), tRow?.[2])
+  const tRow = rows.find((r) => num(r[0]) === target.id)
+  ok('★ 找得到目标用户那一行', !!tRow, tRow?.[2])
   ok(
     '★ 积分 / 兑换券 / 钻石 三列 == 接口的钱包',
     num(tRow?.[5]) === target.points &&
@@ -199,7 +281,7 @@ try {
 
   /* ============ ⑥ 详情 + 账本 ============ */
   console.log('\n⑥ 详情 / 流水')
-  await clickInRow(target.nickname, '详情 / 流水')
+  await clickInRow(target.id, '详情 / 流水')
   await page.waitForFunction(
     () => {
       const d = [...document.querySelectorAll('.el-dialog')].find((x) => x.offsetParent !== null)
@@ -295,7 +377,7 @@ try {
   console.log('\n⑧ 调余额')
   await a.clickByText('关闭')
   await page.waitForFunction(noVisibleDialog, { timeout: 20000 })
-  await clickInRow(target.nickname, '调余额')
+  await clickInRow(target.id, '调余额')
   await page.waitForFunction(
     () => {
       const d = [...document.querySelectorAll('.el-dialog')].find((x) => x.offsetParent !== null)

@@ -263,6 +263,7 @@ python scripts/check-mall-perms.py     # 逐个体检：哪个接口还是「权
 | `GET /mall/user/detail?id=N` | 用户详情 + 钱包 |
 | `GET /mall/user/ledger?id=N` | 账本流水 |
 | `POST /mall/user/adjust` | **调整余额（走账本）** |
+| `POST /mall/user/reset-password` | **重置登录密码（生成一次性密码 + 撤旧令牌）** |
 
 > ⚠️ **注意区分两套账号体系**：
 > `sys_users` = 后台管理员（运营人员）；
@@ -304,6 +305,29 @@ python scripts/check-mall-perms.py     # 逐个体检：哪个接口还是「权
 
 操作人从 JWT 里取（`utils.GetUserName(c)`），写进账本 memo ——
 后台直接改的是生产数据，没有操作记录等于出了事查不到人。
+
+**`user/reset-password` 为什么密码由服务端生成、不让后台手填**：
+
+生产环境还没有短信通道（平台 `DevSmsSender` 在 `IsProduction()` 下直接报错），
+所以 C 端「忘记密码」走不通 —— 用户忘了密码就是永久进不去，而积分、券、存档
+全在那个号里。这是唯一的兜底，但它有三个容易做错的地方：
+
+| 做错 | 症状 |
+|---|---|
+| 写明文密码 | 「重置成功」但谁都登不上 —— 平台端是 `bcrypt.CompareHashAndPassword` 比的，**零报错** |
+| 不撤 `user_token` | 旧设备手里的刷新令牌还能续 7 天。而「要重置密码」的场景里，有一半是「号被别人拿走了」 |
+| 不写 `updated_at` | `BaseModel` 是 `autoUpdateTime:false`，落 0 ⇒ 列表上显示「1970-01-01」 |
+
+- 密码由 `newTempPassword()` 生成（8 位，字母表去掉 `0/O`、`1/l/I`）：这串要念给
+  家长 / 抄在纸上，长得像的字符只会让人登不进去，然后以为「后台给的是错的」。
+- **明文只在响应里出现一次**，后台不落库、不打日志（日志里只记 uid / 操作人 / 备忘）。
+- 游客（`is_guest`）和无手机号的账号直接拒绝，并给出人话原因：设了密码也没法登录
+  （登录要手机号），该做的是让用户先在 App 里点「保存进度」绑定。
+- ⚠️ **旧 access token 最多还能用 2 小时**：平台端 JWT 无状态，没给单条 access
+  做黑名单。跟客服说清楚，别承诺「立刻就进不去了」。
+
+> ★ 弹窗里那个「重置登录密码」按钮放在**详情**弹窗的 footer 左侧，不放列表操作列 ——
+> 那一列已经正好 175px 够一行，再塞一个就换行，整张表高度全变。
 
 ### 4.4 兑换商城 / 心愿商城 / 任务
 
@@ -431,7 +455,8 @@ node scripts/_probe-dashboard.mjs        ✓ 13/13（数字和接口逐项对上
 node scripts/_probe-redeem.mjs           ✓ 18/18（改价真落库、测完改回原价）
 node scripts/_probe-wish.mjs             ✓ 21/21（参考价按元不按券、改外链真落库、筛选真生效）
 node scripts/_probe-user.mjs             ✓ 25/25（账实相符、家长锁不泄露、调余额两道守卫）
-node scripts/_run-all-probes.mjs         ✓ 四条全绿（顺序跑，中间留 6s 避开限流）
+node scripts/_probe-reset-password.mjs   ✓ 18/18（旧密码登不上、新密码能登上、旧令牌作废）
+node scripts/_run-all-probes.mjs         ✓ 六条全绿（顺序跑，中间留 6s 避开限流）
 python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 3/14）
 ```
 
@@ -453,7 +478,7 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 | 菜单 | 页面 | 接口封装 | 探针 |
 |---|---|---|---|
 | 商城运营 → 经营看板 | `web/src/view/mall/dashboard/index.vue` | `web/src/api/mallDashboard.js` | `scripts/_probe-dashboard.mjs`（13） |
-| 商城运营 → App 用户 | `web/src/view/mall/user/index.vue` | `web/src/api/tfUser.js` | `scripts/_probe-user.mjs`（25） |
+| 商城运营 → App 用户 | `web/src/view/mall/user/index.vue` | `web/src/api/tfUser.js` | `scripts/_probe-user.mjs`（25）+ `scripts/_probe-reset-password.mjs`（18） |
 | 商城运营 → 招商审核 | `web/src/view/mall/merchant/index.vue` | `web/src/api/mallMerchant.js` | — |
 | 商城运营 → 兑换商城 | `web/src/view/mall/redeem/index.vue` | `web/src/api/mallRedeem.js` | `scripts/_probe-redeem.mjs`（18） |
 | 商城运营 → 心愿商城 | `web/src/view/mall/wish/index.vue` | `web/src/api/mallWish.js` | `scripts/_probe-wish.mjs`（20） |
@@ -493,7 +518,7 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 `seed-menu.py` 里那张 `PAGES` 表**会先看 `.vue` 在不在**，不在就跳过 ——
 所以可以提前把还没写的页面列进去，它不会建出「点进去空白」的菜单。
 
-> ★★ **写探针时最容易红错地方的四件事**（前两条 `_admin-lib.mjs` 已处理）：
+> ★★ **写探针时最容易红错地方的五件事**（前两条 `_admin-lib.mjs` 已处理）：
 > 1. **点按钮点到了隐藏页签里的同名按钮**。`el-tab-pane` 是 v-show，
 >    隐藏页签的按钮照样在 DOM 里、`innerText` 照样有字。`clickByText`
 >    现在先按「占面积」过滤（不能用 `offsetParent`：`position:fixed`
@@ -509,6 +534,14 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 > 4. **关掉的弹窗节点还在**。这一页两个弹窗**没写** `destroy-on-close`，
 >    关掉后 DOM 还在（只是 `display:none`）⇒「等弹窗消失」永远等不到。
 >    判据要用**可见性**（`offsetParent !== null`），不是存在性。
+>
+> 5. **★ 断言跟着数据一起烂掉**。`_probe-user.mjs` 原来只在前 10 行里挑
+>    「账本最厚的」当目标，可游客账号会不断把第一页顶满（0 分 0 流水，
+>    id 最大排最前）⇒ 挑中的是「第一个游客」，⑦ 去等一条永远不来的流水，
+>    20s 后报「探针中断」，**一个字线索都没有**。现在改成「按钱包从厚到薄
+>    试前 3 个，第一个真有流水的当目标」，目标不在第一页就用手机号筛出来
+>    （**不能按昵称**：游客全叫「小客人」，筛出来一堆会点到别人身上，
+>    而两个人钱包都是 0，点错了照样全绿）。
 >
 > ★ 还有一条：这一页的筛选**不是即时的**，选完要再点「查询」才发请求。
 > 不点的话请求体一个都不会发 —— 页面上那个下拉已经显示「已取消」了，

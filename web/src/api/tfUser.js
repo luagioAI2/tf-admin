@@ -55,3 +55,18 @@ export const adjustPlatformUserBalance = (data) => {
     data
   })
 }
+
+// @Summary 重置用户登录密码（服务端生成，只返回一次）
+// @Router /mall/user/reset-password [post]
+//
+// ⚠️ 这是「用户忘了密码」时**唯一**的兜底：平台的「忘记密码」要短信验证码，
+//    而生产环境还没有短信通道。库里只有 bcrypt 哈希，所以只能重置、不能查。
+// ⚠️ 返回的 `data.password` **只出现这一次**，关掉弹窗就再也拿不到。
+//    别为了「方便」加一个「查看密码」接口 —— 那等于把哈希保护白做了。
+export const resetPlatformUserPassword = (data) => {
+  return service({
+    url: '/mall/user/reset-password',
+    method: 'post',
+    data
+  })
+}

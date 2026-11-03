@@ -36,6 +36,14 @@ CASES = [
     ('POST', '/mall/game/options', {}),
     ('POST', '/mall/release/list', {'page': 1, 'pageSize': 1}),
     ('POST', '/mall/user/list', {'page': 1, 'pageSize': 1}),
+    # 这三个之前一直没覆盖（清单只到 list）。detail / ledger 是 GET，
+    # 少了 id 会「参数校验失败」——那也算**放行了**，正是这条要判的。
+    ('GET', '/mall/user/detail', None),
+    ('GET', '/mall/user/ledger', None),
+    # 两个写接口都用「参数不全」的方式探：能证明 casbin 没拦，
+    # 又不会真的改到谁的钱 / 密码（uid=0 根本不存在）。
+    ('POST', '/mall/user/adjust', {'uid': 0}),
+    ('POST', '/mall/user/reset-password', {}),
     ('POST', '/mall/redeem/item/list', {'page': 1, 'pageSize': 1}),
     ('POST', '/mall/redeem/record/list', {'page': 1, 'pageSize': 1}),
     ('POST', '/mall/wish/item/list', {'page': 1, 'pageSize': 1}),

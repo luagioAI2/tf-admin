@@ -2,6 +2,7 @@ package mall
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
 	"github.com/flipped-aurora/gin-vue-admin/server/model/mall"
 	"github.com/flipped-aurora/gin-vue-admin/server/model/mall/request"
+	"github.com/flipped-aurora/gin-vue-admin/server/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -438,6 +440,95 @@ func (s *PlatformUserService) AdjustBalance(ctx context.Context, req request.Adj
 		entry.UpdatedAt = now
 		return tx.Create(entry).Error
 	})
+}
+
+/* ResetPassword 后台重置 C 端用户的登录密码，返回**一次性的**新密码。
+ *
+ * ## 它解决的是什么
+ *
+ * 生产环境还没有短信通道（平台的 `DevSmsSender` 在 `IsProduction()` 下直接
+ * 返回错误），所以 C 端「忘记密码」那条路走不通。用户忘了密码 = 永久进不去，
+ * 而他的积分、兑换券、农场、存档全在那个账号里。这是唯一的兜底。
+ *
+ * ## 三条必须做的事
+ *
+ *  1. **写 bcrypt 哈希**，不能写明文 —— 平台端 `Login` 是
+ *     `bcrypt.CompareHashAndPassword` 比的，写明文等于密码永远不对。
+ *  2. **撤掉所有 refresh token**（`user_token.revoked = 1`）。
+ *     不撤的话，旧设备手里的刷新令牌还能续 7 天 ——
+ *     而「要重置密码」的场景里，有一半是「账号被别人拿走了」。
+ *     ⚠️ 旧 **access token** 仍然最多还能用 2 小时（JWT 无状态，
+ *     平台端没有给单条 access 做黑名单）。这一点必须在工单里说清楚。
+ *  3. **写 `updated_at`**：`BaseModel` 是 `autoUpdateTime:false`，
+ *     不手写就是 0（1970），后台列表上会显示成「1970-01-01」。
+ */
+func (s *PlatformUserService) ResetPassword(ctx context.Context, req request.ResetPasswordReq, operator string) (string, error) {
+	var u mall.PlatformUser
+	if err := global.GVA_DB.WithContext(ctx).Where("id = ?", req.UID).First(&u).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", errors.New("用户不存在")
+		}
+		return "", err
+	}
+
+	/* 游客没有密码可重置：他连手机号都没有，设了密码也没法登录
+	   （登录要手机号）。真正的做法是让他先在 App 里绑定手机号。 */
+	if u.IsGuest {
+		return "", errors.New("这是临时账号（游客），还没有手机号；请让用户在 App 里点「保存进度」绑定手机号")
+	}
+	if u.Mobile == "" {
+		return "", errors.New("这个账号没有手机号，重置了也登不进来；请先让用户绑定手机号")
+	}
+
+	pwd, err := newTempPassword()
+	if err != nil {
+		return "", err
+	}
+	hash := utils.BcryptHash(pwd)
+
+	err = global.GVA_DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if e := tx.Model(&mall.PlatformUser{}).Where("id = ?", req.UID).
+			Updates(map[string]interface{}{
+				"password":   hash,
+				"updated_at": nowUnix(),
+			}).Error; e != nil {
+			return e
+		}
+		/* 旧设备的刷新令牌全部作废。`revoked` 是 bool 列（SQLite 存 0/1），
+		   用 `= ?` 传 false 而不是写 `revoked = 0`，免得换库时又踩一次。 */
+		return tx.Table("user_token").
+			Where("uid = ? AND revoked = ?", req.UID, false).
+			Update("revoked", true).Error
+	})
+	if err != nil {
+		return "", err
+	}
+
+	global.GVA_LOG.Info("admin reset user password",
+		zap.Uint("uid", req.UID),
+		zap.String("operator", operator),
+		zap.String("memo", req.Memo))
+	return pwd, nil
+}
+
+/* newTempPassword 生成一次性密码。
+ *
+ * 长度 8，字母表**故意**去掉 `0/O`、`1/l/I`：这串要被人念出来 / 抄在纸上
+ * 交给家长，长得像的字符只会让人登不进去，然后以为「后台给的是错的」。
+ * 8 位 × 31 个字符 ≈ 40 bit，对一个「用一次就改」的临时密码够用。
+ */
+func newTempPassword() (string, error) {
+	const alphabet = "abcdefghjkmnpqrstuvwxyz23456789"
+	const n = 8
+	buf := make([]byte, n)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	out := make([]byte, n)
+	for i, b := range buf {
+		out[i] = alphabet[int(b)%len(alphabet)]
+	}
+	return string(out), nil
 }
 
 // paginate 分页 scope

@@ -61,6 +61,7 @@ APIS = [
     ("GET", "/mall/user/detail", "App 用户详情", "App用户"),
     ("GET", "/mall/user/ledger", "App 用户账本", "App用户"),
     ("POST", "/mall/user/adjust", "调整用户余额", "App用户"),
+    ("POST", "/mall/user/reset-password", "重置用户密码", "App用户"),
     # 兑换
     ("POST", "/mall/redeem/item/list", "兑换商品列表", "兑换"),
     ("POST", "/mall/redeem/item/update", "更新兑换商品", "兑换"),

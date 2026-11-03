@@ -40,6 +40,7 @@ APIS = [
     ("GET", "/mall/user/detail", "App 用户详情"),
     ("GET", "/mall/user/ledger", "App 用户账本"),
     ("POST", "/mall/user/adjust", "调整用户余额"),
+    ("POST", "/mall/user/reset-password", "重置用户密码"),
 ]
 API_GROUP = "App用户"
 

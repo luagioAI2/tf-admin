@@ -293,6 +293,38 @@ func (a *PlatformUserApi) AdjustBalance(c *gin.Context) {
 	response.OkWithMessage("调整成功", c)
 }
 
+// ResetPassword 重置用户密码
+// @Tags     MallUser
+// @Summary  重置某个 App 用户的登录密码（服务端生成，一次性返回）
+// @Produce  application/json
+// @Param    data  body      mallReq.ResetPasswordReq  true  "uid + 备注"
+// @Success  200   {object}  response.Response{}       "新密码只在这里出现一次"
+// @Router   /mall/user/reset-password [post]
+func (a *PlatformUserApi) ResetPassword(c *gin.Context) {
+	var req mallReq.ResetPasswordReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.FailWithMessage(err.Error(), c)
+		return
+	}
+	operator := utils.GetUserName(c)
+	if operator == "" {
+		operator = "admin"
+	}
+	pwd, err := platformUserService.ResetPassword(c.Request.Context(), req, operator)
+	if err != nil {
+		/* ⚠️ 这里**不能**把 err 直接拼给用户看吗？能 —— 这几个错误都是
+		   「游客没有密码」「用户不存在」这种人话，不是数据库报错。
+		   但日志要留一份，密码重置必须可追溯。 */
+		global.GVA_LOG.Warn("重置密码失败",
+			zap.Uint("uid", req.UID), zap.String("operator", operator), zap.Error(err))
+		response.FailWithMessage(err.Error(), c)
+		return
+	}
+	/* 新密码**只在这一次响应里出现**：库里存的是 bcrypt 哈希，
+	   关掉这个弹窗就再也查不到了（这是对的，别加「查看密码」接口）。 */
+	response.OkWithDetailed(gin.H{"password": pwd}, "已重置，请把新密码交给用户", c)
+}
+
 // ============================ 兑换商城 ============================
 
 type RedeemApi struct{}

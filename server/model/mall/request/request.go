@@ -83,6 +83,28 @@ type AdjustBalanceReq struct {
 	Memo  string `json:"memo" binding:"required,max=128"`
 }
 
+// ResetPasswordReq 后台重置某个 C 端用户的登录密码。
+//
+// ## 为什么是「重置」而不是「改」
+//
+// 后台**看不到**原密码（库里只有 bcrypt 哈希，而且不该能反推）。
+// 用户忘了密码时，能做的只有「设一个新的，让他用新的登进来」。
+//
+// ## 为什么不传新密码
+//
+// 由服务端生成，不让人填。理由很实际：让人填，早晚会有人图省事填 `123456`，
+// 而这是**线上**账号的登录凭据。生成器也排掉了 `0/O`、`1/l/I` 这些
+// 电话里念会念错、手抄会抄错的字符。
+//
+// ## Memo 必填
+//
+// 重置密码是**动别人账号**的操作。工单号 / 用户诉求写在这里，
+// 将来有人问「这个号怎么被改过密码」时，只能靠它。
+type ResetPasswordReq struct {
+	UID  uint   `json:"uid" binding:"required"`
+	Memo string `json:"memo" binding:"required,max=128"`
+}
+
 // ============================ 兑换商城 ============================
 
 // RedeemItemSearch 兑换商品查询

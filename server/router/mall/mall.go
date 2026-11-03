@@ -81,6 +81,8 @@ func (r *PlatformUserRouter) InitPlatformUserRouter(router *gin.RouterGroup) {
 	{
 		// 改余额是敏感操作，必须留痕
 		group.POST("adjust", platformUserApi.AdjustBalance)
+		// 重置密码同样是敏感操作：它动了别人的登录凭据
+		group.POST("reset-password", platformUserApi.ResetPassword)
 	}
 	{
 		groupWithoutRecord.POST("list", platformUserApi.List)
