@@ -17,7 +17,7 @@
  */
 
 import { createRequire } from 'node:module'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 
@@ -245,7 +245,9 @@ try {
 
   ok('没有页面级报错', errors.length === 0, errors.slice(0, 2).join(' | '))
 
-  /* 留一张图给人工看：断言只验数字，验不了「卡片挤在一起 / 字被截断」 */
+  /* 留一张图给人工看：断言只验数字，验不了「卡片挤在一起 / 字被截断」。
+     目录先建好 —— 别指望 screenshot 自己 mkdir（换个环境就是 ENOENT）。 */
+  mkdirSync('.e2e-scratch', { recursive: true })
   await page.screenshot({ path: '.e2e-scratch/dashboard.png' })
   console.log('  截图：.e2e-scratch/dashboard.png')
 } catch (e) {
