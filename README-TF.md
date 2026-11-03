@@ -283,6 +283,25 @@ python scripts/check-mall-perms.py     # 逐个体检：哪个接口还是「权
 4. 写账本（source = manual_adjust，memo 里带操作人）
 ```
 
+**「余额 = 账本 delta 之和」怎么验**（`scripts/_probe-user.mjs` ⑦）：
+
+界面按 `id DESC` 排流水，所以**每种币第一次出现的那一行就是最新那行**，
+它的 `balance_after` 必须等于当前钱包余额。对不上就说明余额和账本
+已经不是一回事了 —— 而界面上**不会报任何错**，只有人肉看才发现。
+
+> ★ 详情弹窗里的账本是**异步补上**的：弹窗一出现「账本流水」标题就在了，
+> 但那一刻表格是空的、分页写着「共 0 条」。探针要等**行出现**，
+> 等标题会红成「账本没有流水」，而接口明明有 315 条。
+
+**家长锁（`parentPin`）在界面上只显示状态，不显示内容**：
+
+- 列表列只有「已设置 / 未设 / —」三种文案；`pin_known=false`（老库还没有
+  `user_settings` 表）画「—」，不能画「未设」—— 把「不知道」画成「没有」是在撒谎。
+- ⚠️ **详情接口不返回 `has_pin`**（那是列表里批量算的）。`openDetail` 整份
+  覆盖 `detail` 会把它变成 `undefined` ⇒ 明明设了密码，详情里说没设。
+  页面专门保留了列表那一份，探针里有一条断言守它。
+- 探针**不去设 / 清 PIN** —— 那是凭据，不该被测试动。
+
 操作人从 JWT 里取（`utils.GetUserName(c)`），写进账本 memo ——
 后台直接改的是生产数据，没有操作记录等于出了事查不到人。
 
@@ -410,8 +429,9 @@ C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提
 
 node scripts/_probe-dashboard.mjs        ✓ 13/13（数字和接口逐项对上，两个待处理数对账）
 node scripts/_probe-redeem.mjs           ✓ 18/18（改价真落库、测完改回原价）
-node scripts/_probe-wish.mjs             ✓ 20/20（参考价按元不按券、改外链真落库、筛选真生效）
-node scripts/_run-all-probes.mjs         ✓ 三条全绿（顺序跑，中间留 6s 避开限流）
+node scripts/_probe-wish.mjs             ✓ 21/21（参考价按元不按券、改外链真落库、筛选真生效）
+node scripts/_probe-user.mjs             ✓ 25/25（账实相符、家长锁不泄露、调余额两道守卫）
+node scripts/_run-all-probes.mjs         ✓ 四条全绿（顺序跑，中间留 6s 避开限流）
 python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 3/14）
 ```
 
@@ -433,7 +453,7 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 | 菜单 | 页面 | 接口封装 | 探针 |
 |---|---|---|---|
 | 商城运营 → 经营看板 | `web/src/view/mall/dashboard/index.vue` | `web/src/api/mallDashboard.js` | `scripts/_probe-dashboard.mjs`（13） |
-| 商城运营 → App 用户 | `web/src/view/mall/user/index.vue` | `web/src/api/tfUser.js` | — |
+| 商城运营 → App 用户 | `web/src/view/mall/user/index.vue` | `web/src/api/tfUser.js` | `scripts/_probe-user.mjs`（25） |
 | 商城运营 → 招商审核 | `web/src/view/mall/merchant/index.vue` | `web/src/api/mallMerchant.js` | — |
 | 商城运营 → 兑换商城 | `web/src/view/mall/redeem/index.vue` | `web/src/api/mallRedeem.js` | `scripts/_probe-redeem.mjs`（18） |
 | 商城运营 → 心愿商城 | `web/src/view/mall/wish/index.vue` | `web/src/api/mallWish.js` | `scripts/_probe-wish.mjs`（20） |
@@ -473,7 +493,7 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 `seed-menu.py` 里那张 `PAGES` 表**会先看 `.vue` 在不在**，不在就跳过 ——
 所以可以提前把还没写的页面列进去，它不会建出「点进去空白」的菜单。
 
-> ★★ **写探针时最容易红错地方的两件事**（`_admin-lib.mjs` 已经处理了）：
+> ★★ **写探针时最容易红错地方的四件事**（前两条 `_admin-lib.mjs` 已处理）：
 > 1. **点按钮点到了隐藏页签里的同名按钮**。`el-tab-pane` 是 v-show，
 >    隐藏页签的按钮照样在 DOM 里、`innerText` 照样有字。`clickByText`
 >    现在先按「占面积」过滤（不能用 `offsetParent`：`position:fixed`
@@ -482,10 +502,20 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 >    本来就有一堆「已取消」标签，而它们在 DOM 里排在 body 末尾的 popper
 >    **前面** ⇒ 点到表格里，什么都不会发生，断言红成「筛选没生效」。
 >    用 `pickOption()`，它只在 `.el-select-dropdown` 里找。
+> 3. **等了一个「上一页已经满足」的条件**。切到 App 用户时等
+>    「表格里有行」—— 仪表盘本来就有一张 5 行的表，条件立刻满足，
+>    读到的是上一页的表格，然后 7 条断言一起红在「列对不上」。
+>    **等这一页特有的文字**（如「个账号」），别等通用结构。
+> 4. **关掉的弹窗节点还在**。这一页两个弹窗**没写** `destroy-on-close`，
+>    关掉后 DOM 还在（只是 `display:none`）⇒「等弹窗消失」永远等不到。
+>    判据要用**可见性**（`offsetParent !== null`），不是存在性。
 >
 > ★ 还有一条：这一页的筛选**不是即时的**，选完要再点「查询」才发请求。
 > 不点的话请求体一个都不会发 —— 页面上那个下拉已经显示「已取消」了，
 > 看着非常像后端坏了。
+>
+> ★ 详情弹窗里的账本是**异步补上**的：弹窗一出现「账本流水」这个标题就在了，
+> 但那一刻表格还是空的、分页写着「共 0 条」。要等**行出现**，不是等标题。
 
 ---
 

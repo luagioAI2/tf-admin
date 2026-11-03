@@ -54,7 +54,9 @@ try {
   /* ============ ③ 点进去 ============ */
   console.log('\n③ 打开看板')
   await a.clickByText('经营看板')
-  await page.waitForFunction(() => location.hash.includes('dashboard'), { timeout: 20000 })
+  /* ★ 要等 `mall/dashboard`，不能只等 `dashboard`：登录后落地页的 hash 本来就是
+     `#/layout/dashboard`，条件立刻满足 ⇒ 等于没等。 */
+  await page.waitForFunction(() => location.hash.includes('mall/dashboard'), { timeout: 20000 })
   await page.waitForFunction(() => document.body.innerText.includes('钱包里的积分'), {
     timeout: 20000
   })
