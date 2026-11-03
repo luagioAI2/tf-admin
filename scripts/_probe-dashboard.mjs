@@ -62,6 +62,26 @@ try {
   })
   ok('★ 页面渲染出来了（不是空白页）', true)
 
+  /* ★★ 等「钱包里的积分」**这个标题**出现 ≠ 数字到了：卡片是先把标题和 0 画出来，
+     接口回来再填数。标题在、数字还是 0 的那一小段里读，就会读出一片 0 ——
+     而「一片 0」看起来特别像接口 403 了。以前是靠运气赢的（接口够快），
+     加了请求拦截之后就没那么快了，五条探针里它第一个红。
+     判据要等**具体的那个数**变成接口给的数；等不到也不要在这里抛
+     （下面三条断言会把「界面 X / 接口 Y」写清楚）。 */
+  const want = overview.data ?? {}
+  const num = (s) => Number(String(s).replace(/[^\d-]/g, ''))
+  await a.waitFor(
+    (n) => {
+      const card = [...document.querySelectorAll('.card')].find(
+        (c) => (c.querySelector('.k')?.innerText ?? '').trim() === '💰钱包里的积分'
+      )
+      const v = card?.querySelector('.v')?.innerText ?? ''
+      return Number(String(v).replace(/[^\d-]/g, '')) === n
+    },
+    '看板数字变成接口的 points_in_wallets',
+    { timeout: 15000, arg: want.points_in_wallets, soft: true }
+  )
+
   /* ============ ④ 数字要和接口一致 ============ */
   console.log('\n④ 数字')
   const shown = await page.evaluate(() => {
@@ -81,8 +101,6 @@ try {
     return { cards: out, facts }
   })
 
-  const want = overview.data ?? {}
-  const num = (s) => Number(String(s).replace(/[^\d-]/g, ''))
   ok(
     '★ 「钱包里的积分」= 接口的 points_in_wallets',
     num(shown.cards['💰钱包里的积分']) === want.points_in_wallets,

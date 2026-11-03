@@ -245,6 +245,12 @@ func (s *PlatformUserService) List(ctx context.Context, info request.PlatformUse
 	if info.Status != nil {
 		db = db.Where("status = ?", *info.Status)
 	}
+	/* 账号类型：游客（App 一启动就自动建的临时账号）还是正式账号（绑了手机号）。
+	   ⚠️ 传 false 而不是写 `is_guest = 0`：SQLite 里这列是 0/1，
+	     换到 MySQL 的 tinyint(1) 也一样，但写成布尔参数两边都不用改。 */
+	if info.IsGuest != nil {
+		db = db.Where("is_guest = ?", *info.IsGuest == 1)
+	}
 
 	if err = db.Count(&total).Error; err != nil {
 		return

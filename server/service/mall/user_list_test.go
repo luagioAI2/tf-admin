@@ -66,10 +66,12 @@ func newTestDB(t *testing.T) {
 		`INSERT INTO user_settings (uid, payload, size, version) VALUES
 			(1, '{"childName":"测试家长","parentPin":"1234"}', 40, 3),
 			(2, '{"childName":"第二位"}', 20, 1)`,
-		`INSERT INTO user (id, mobile, nickname, status, created_at) VALUES
-			(1, '13800138000', '测试家长', 1, 1700000000),
-			(2, '13800138001', '第二位', 1, 1700000100),
-			(3, '12000120000', '宝贝', 1, 1700000200)`,
+		/* uid=3 是**游客**：App 一启动就自动建的临时账号，没有手机号。
+		   夹具要造得出「两种账号混在一页」，否则筛游客的测试是空对空。 */
+		`INSERT INTO user (id, mobile, nickname, status, created_at, is_guest) VALUES
+			(1, '13800138000', '测试家长', 1, 1700000000, 0),
+			(2, '13800138001', '第二位', 1, 1700000100, 0),
+			(3, '', '小客人', 1, 1700000200, 1)`,
 		`INSERT INTO wallet (uid, points, coupon, diamond, version) VALUES
 			(1, 219, 43, 0, 7),
 			(2, 100, 0, 5, 1)`,
@@ -183,7 +185,7 @@ func TestPlatformUserListFilters(t *testing.T) {
 
 	// 昵称片段
 	info = search(1, 10)
-	info.Nickname = "宝贝"
+	info.Nickname = "小客人"
 	_, total, err = svc.List(context.Background(), info)
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -203,6 +205,36 @@ func TestPlatformUserListFilters(t *testing.T) {
 	}
 	if total != 0 {
 		t.Fatalf("status=0 过滤：total=%d，应该是 0", total)
+	}
+
+	/* 账号类型：游客 vs 正式。
+	   ★ 这条守的是「传 0 别被当成没传」—— 0 = 只看正式账号，是个有效值；
+	     写成 `if info.IsGuest != nil && *info.IsGuest != 0` 就会静默退化成全量，
+	     而界面上「只看正式账号」照样显示全部（游客混在里面，看不出错）。 */
+	guest, formal := 1, 0
+	info = search(1, 10)
+	info.IsGuest = &guest
+	rows, total, err = svc.List(context.Background(), info)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if total != 1 || len(rows) != 1 || rows[0].ID != 3 {
+		t.Fatalf("只看游客：total=%d rows=%+v，应该只有 id=3", total, rows)
+	}
+
+	info = search(1, 10)
+	info.IsGuest = &formal
+	rows, total, err = svc.List(context.Background(), info)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if total != 2 {
+		t.Fatalf("只看正式账号：total=%d，应该是 2", total)
+	}
+	for _, r := range rows {
+		if r.IsGuest {
+			t.Fatalf("「只看正式账号」里混进了游客：%+v", r)
+		}
 	}
 
 	// 分页

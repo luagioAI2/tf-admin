@@ -420,6 +420,107 @@ try {
      调余额会写真实账本流水，跑一次就多一条，反复跑会把账本灌满。 */
   ok('没有真的改动余额（探针只验守卫，不写流水）', true)
 
+  /* ============ ⑨ 账号类型筛选（游客 / 正式） ============ */
+  console.log('\n⑨ 账号类型筛选')
+  /* ⑧ 把「调余额」弹窗**故意留着**（那是它的断言之一），先关掉再往下。
+     ★ 它是「取消」不是「关闭」——「关闭」只在详情弹窗里（上面 ⑥ 用的那个）。 */
+  await a.clickByText('取消')
+  await page.waitForFunction(noVisibleDialog, { timeout: 20000 })
+  /* 前面为了把目标弄到眼前筛过手机号，先「重置」回全量 */
+  await a.clickByText('重置')
+  await page.waitForFunction(
+    () => document.querySelectorAll('tbody tr.el-table__row').length > 1,
+    { timeout: 20000 }
+  )
+
+  /* 展开「账号类型」下拉。★ 别按文字点「全部」——三个下拉的占位都是「全部」，
+     点到哪个取决于 DOM 顺序，而这一页的顺序改一次就静默错。按 label 定位。 */
+  const openTypeSelect = async () => {
+    const okBox = await page.evaluate(() => {
+      const item = [...document.querySelectorAll('.el-form-item')].find((f) =>
+        (f.innerText || '').trim().startsWith('账号类型')
+      )
+      const w = item?.querySelector('.el-select__wrapper, .el-input__wrapper')
+      if (!w) return false
+      w.click()
+      return true
+    })
+    if (!okBox) throw new Error('找不到「账号类型」下拉')
+    await new Promise((r) => setTimeout(r, 400))
+  }
+
+  const guestTotal = (await adminApi('/mall/user/list', { page: 1, pageSize: 10, is_guest: 1 })).data
+    ?.total
+  const formalTotal = (await adminApi('/mall/user/list', { page: 1, pageSize: 10, is_guest: 0 })).data
+    ?.total
+
+  /* ★★ 等「共 N 个账号」变成接口那个数，**别等「表格里有行」** ——
+     上一次查询的行还在，条件立刻满足，读到的是**旧数据**。
+     实测过：等「有行」时读到的是上一屏（正式账号），于是「游客每一行都没有
+     手机号」那条红在一个根本不成立的地方，而筛选其实是对的。 */
+  const totalOnPage = async () =>
+    num((await page.evaluate(() => document.body.innerText)).match(/共\s*(\d+)\s*个账号/)?.[1])
+
+  /* ★ 超时**要带线索**：只报「Waiting failed: 20000ms exceeded」的话，
+     读的人分不清「筛选没生效」和「后端慢了」——实测过，前端漏发 is_guest
+     时就是这个样子，20 秒干等。 */
+  const waitTotal = async (n, label) => {
+    try {
+      await page.waitForFunction(
+        (want) => {
+          const m = document.body.innerText.match(/共\s*(\d+)\s*个账号/)
+          return !!m && Number(m[1]) === want
+        },
+        { timeout: 20000 },
+        n
+      )
+    } catch {
+      throw new Error(
+        `${label}：等「共 ${n} 个账号」超时，界面现在写的是「共 ${await totalOnPage()} 个账号」` +
+          `（总数没变 = 筛选条件没发出去 / 没生效，不是后端慢）`
+      )
+    }
+  }
+
+  await openTypeSelect()
+  await a.pickOption('游客（临时）')
+  await a.clickByText('查询')
+  await waitTotal(guestTotal, '只看游客')
+  let typeRows = await readRows()
+  ok(
+    '★ 选「游客」后总数 = 接口 is_guest=1 的 total',
+    num(
+      (await page.evaluate(() => document.body.innerText)).match(/共\s*(\d+)\s*个账号/)?.[1]
+    ) === guestTotal,
+    `界面 ${(await page.evaluate(() => document.body.innerText)).match(/共\s*\d+\s*个账号/)?.[0]} / 接口 ${guestTotal}`
+  )
+  /* ★ 游客 = 还没绑手机号，所以手机号那一列必须是「—」。
+     这条同时守住「筛了但没生效」：全量第一页里正式账号是有手机号的。 */
+  ok(
+    '★ 游客列表里每一行都没有手机号（这就是「游客」的定义）',
+    typeRows.every((r) => (r[3] ?? '') === '—'),
+    typeRows.map((r) => r[3]).slice(0, 4).join(' | ')
+  )
+
+  await openTypeSelect()
+  await a.pickOption('正式账号')
+  await a.clickByText('查询')
+  await waitTotal(formalTotal, '只看正式账号')
+  typeRows = await readRows()
+  ok(
+    '★ 选「正式账号」后总数 = 接口 is_guest=0 的 total',
+    num(
+      (await page.evaluate(() => document.body.innerText)).match(/共\s*(\d+)\s*个账号/)?.[1]
+    ) === formalTotal,
+    `界面 ${(await page.evaluate(() => document.body.innerText)).match(/共\s*\d+\s*个账号/)?.[0]} / 接口 ${formalTotal}`
+  )
+  ok(
+    '★ 正式账号每一行都有手机号（不是把游客筛剩下来）',
+    typeRows.every((r) => (r[3] ?? '') !== '—' && r[3] !== ''),
+    typeRows.map((r) => r[3]).slice(0, 4).join(' | ')
+  )
+  await a.shot('user-formal-only')
+
   ok('没有页面级报错', errors.length === 0, [...errors, ...reqFails].slice(0, 3).join(' | '))
   console.log('  截图：' + (await a.shot('user-detail')))
 } catch (e) {

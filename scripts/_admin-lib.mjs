@@ -127,6 +127,55 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
     }
   })
 
+  /* ★★ 外部请求一律「就地回个空壳」，不真的发出去。
+     为什么：GVA 首页那张「提交记录」卡会去 `api.github.com` 拉 commit，
+     而 Chrome 走系统代理（本机 7897），那条出口被 GitHub 限流 ——
+     实测**直连 200、走代理 403**。403 ⇒ axios reject ⇒ 没人 catch ⇒
+     `pageerror` ⇒ **五条探针一起红在「没有页面级报错」上**，报的还只有
+     `AxiosError$1` 一个字的线索。（默认头像 `qmplusimg.henrongyi.top` 同理，
+     离线必失败，只是被下面的 isLocal 过滤掉了。）
+     探针要验的是**我们自己的页面**，第三方能不能连通不该由它决定 ——
+     否则「代理开关」这种和代码毫无关系的事能把整个套件变红。 */
+  const stubbed = []
+  const safe = (p) => p.catch(() => {}) /* 同一个请求被处理两次会抛，别让它变成未捕获 */
+  /* ★ 跨域 stub **必须自己带 CORS 头**：`api.github.com` 相对 `localhost:8891`
+     是跨域的，回包上没有 `Access-Control-Allow-Origin` ⇒ Chrome 按 CORS 拦成
+     `net::ERR_FAILED` ⇒ axios 还是 reject ⇒ 还是 `AxiosError$1`。
+     第一版就是漏了这个头，看起来「stub 没生效」。 */
+  const CORS = { 'Access-Control-Allow-Origin': '*' }
+  await page.setRequestInterception(true)
+  page.on('request', (r) => {
+    const u = r.url()
+    if (/^(data|blob|about|chrome|devtools):/.test(u) || isLocal(u)) return safe(r.continue())
+    stubbed.push(u)
+    const type = r.resourceType()
+    if (type === 'image') {
+      /* 1×1 透明 PNG：头像 / 图标位置不该因为「图没加载出来」而改变布局 */
+      return safe(
+        r.respond({
+          status: 200,
+          contentType: 'image/png',
+          headers: CORS,
+          body: Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+            'base64'
+          )
+        })
+      )
+    }
+    if (type === 'script') {
+      return safe(
+        r.respond({
+          status: 200,
+          contentType: 'application/javascript',
+          headers: CORS,
+          body: '/* 探针拦掉的外部脚本 */'
+        })
+      )
+    }
+    return safe(r.respond({ status: 200, contentType: 'application/json', headers: CORS, body: '[]' }))
+  })
+
   /* ★ 两个框都**可能是预填的**（GVA 会把上次登录的用户名留在表单里），
      直接 type 会拼成 `adminadmin`，然后红在「用户名或密码错误」上 ——
      看着像密码不对，其实是填错了。所以先 Ctrl+A 全选再打。 */
@@ -280,11 +329,47 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
     return `.e2e-scratch/${name}.png`
   }
 
+  /**
+   * 等一个条件成立；**超时就把「当时屏幕上是什么」写进错误里**。
+   *
+   * ★ 原生 `page.waitForFunction` 超时只给 `Waiting failed: 20000ms exceeded` ——
+   *   既不知道等的是哪一条，也不知道当时页面停在哪。实测一次「详情弹窗里的
+   *   重置按钮等不到」红了两次、第三次自己好了，靠这句话根本查不下去
+   *   （到底是弹窗没开、按钮没渲染，还是点歪了，三种原因长一个样）。
+   * ★ `soft: true` 时不抛，返回 false —— 用在「后面还有断言会报实际值」的地方，
+   *   避免同一个毛病红两遍、还多等 20 秒。
+   */
+  const waitFor = async (fn, label, { timeout = 20000, arg, soft = false } = {}) => {
+    try {
+      await page.waitForFunction(fn, { timeout }, arg)
+      return true
+    } catch (e) {
+      if (soft) return false
+      const snap = await page
+        .evaluate(() => ({
+          hash: location.hash,
+          rows: document.querySelectorAll('tbody tr.el-table__row').length,
+          dialogs: [...document.querySelectorAll('.el-dialog')].map((d) => ({
+            title: (d.querySelector('.el-dialog__title')?.innerText ?? '').trim(),
+            w: Math.round(d.getBoundingClientRect().width),
+            buttons: [...d.querySelectorAll('button')]
+              .map((b) => (b.innerText ?? '').trim())
+              .filter(Boolean)
+          }))
+        }))
+        .catch(() => null)
+      throw new Error(
+        `等「${label}」超时（${timeout}ms）—— 当时：${snap ? JSON.stringify(snap) : '页面已关闭'}`
+      )
+    }
+  }
+
   return {
     browser,
     page,
     errors,
     reqFails,
+    stubbed,
     fill,
     clickByText,
     openSelectByLabel,
@@ -292,6 +377,7 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
     login,
     openMallGroup,
     shot,
+    waitFor,
     close: () => browser.close()
   }
 }

@@ -67,6 +67,13 @@ type PlatformUserSearch struct {
 	Mobile   string `json:"mobile" form:"mobile"`
 	Nickname string `json:"nickname" form:"nickname"`
 	Status   *int   `json:"status" form:"status"`
+	// IsGuest 账号类型：1 = 只看游客（临时账号），0 = 只看正式账号（绑了手机号）。
+	//
+	// 为什么要有它：游客是 App 一启动就自动建的，id 最大 ⇒ **永远排在最前面**。
+	// 运营点进来看到一屏「小客人」（0 分 0 流水），真正要看的用户全被挤到
+	// 后面几页去 —— 而「游客有 40 个」这件事本身也是有意义的运营数字。
+	// 指针：nil = 不筛；0 是有效值（只看正式账号），不能用 0 当「没传」。
+	IsGuest *int `json:"is_guest" form:"is_guest"`
 }
 
 // AdjustBalanceReq 后台调整余额。

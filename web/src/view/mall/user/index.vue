@@ -27,6 +27,20 @@
             style="width: 160px"
           />
         </el-form-item>
+        <!-- 账号类型：游客是 App 一启动就自动建的临时账号，id 最大 ⇒
+             永远排在最前面。不筛的话第一页全是一屏「小客人」（0 分 0 流水），
+             真正要看的用户被挤到后面几页去。 -->
+        <el-form-item label="账号类型">
+          <el-select
+            v-model="searchInfo.isGuest"
+            placeholder="全部"
+            clearable
+            style="width: 130px"
+          >
+            <el-option label="正式账号" value="0" />
+            <el-option label="游客（临时）" value="1" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="状态">
           <el-select
             v-model="searchInfo.status"
@@ -311,7 +325,7 @@
   const pageSize = ref(10)
   const total = ref(0)
   const tableData = ref([])
-  const searchInfo = ref({ mobile: '', nickname: '', status: '' })
+  const searchInfo = ref({ mobile: '', nickname: '', status: '', isGuest: '' })
 
   const detailVisible = ref(false)
   const detail = ref({ user: null, wallet: null })
@@ -359,6 +373,11 @@
     if (searchInfo.value.status !== '' && searchInfo.value.status !== undefined) {
       payload.status = Number(searchInfo.value.status)
     }
+    /* 同样要「整个省掉」：服务端是 `*int`，传 0 等于「只看正式账号」——
+       那正是「正式账号」这个选项本身，但**不选**的时候必须是「不筛」。 */
+    if (searchInfo.value.isGuest !== '' && searchInfo.value.isGuest !== undefined) {
+      payload.is_guest = Number(searchInfo.value.isGuest)
+    }
     const res = await getPlatformUserList(payload)
     if (res.code === 0) {
       tableData.value = res.data.list ?? []
@@ -371,7 +390,7 @@
     getTableData()
   }
   const onReset = () => {
-    searchInfo.value = { mobile: '', nickname: '', status: '' }
+    searchInfo.value = { mobile: '', nickname: '', status: '', isGuest: '' }
     page.value = 1
     getTableData()
   }

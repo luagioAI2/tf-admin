@@ -259,7 +259,7 @@ python scripts/check-mall-perms.py     # 逐个体检：哪个接口还是「权
 
 | 接口 | 说明 |
 |---|---|
-| `POST /mall/user/list` | C 端用户列表 |
+| `POST /mall/user/list` | C 端用户列表（`is_guest=1/0` 只看游客 / 只看正式账号） |
 | `GET /mall/user/detail?id=N` | 用户详情 + 钱包 |
 | `GET /mall/user/ledger?id=N` | 账本流水 |
 | `POST /mall/user/adjust` | **调整余额（走账本）** |
@@ -293,6 +293,12 @@ python scripts/check-mall-perms.py     # 逐个体检：哪个接口还是「权
 > ★ 详情弹窗里的账本是**异步补上**的：弹窗一出现「账本流水」标题就在了，
 > 但那一刻表格是空的、分页写着「共 0 条」。探针要等**行出现**，
 > 等标题会红成「账本没有流水」，而接口明明有 315 条。
+
+**为什么要能按「账号类型」筛**：游客是 App 一启动就自动建的临时账号，`id` 最大
+⇒ **永远排在最前面**。不筛的话运营点进来第一页全是一屏「小客人」（0 分 0 流水），
+真正要看的用户被挤到后面几页 —— 而「现在有多少人还在用临时账号」本身也是个
+有意义的运营数字。字段是 `*int`：`nil` = 不筛，`0` = 只看正式账号（**0 是有效值**，
+不能用 0 当「没传」，否则筛了等于没筛，而界面上照样显示全部）。
 
 **家长锁（`parentPin`）在界面上只显示状态，不显示内容**：
 
@@ -454,7 +460,7 @@ C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提
 node scripts/_probe-dashboard.mjs        ✓ 13/13（数字和接口逐项对上，两个待处理数对账）
 node scripts/_probe-redeem.mjs           ✓ 18/18（改价真落库、测完改回原价）
 node scripts/_probe-wish.mjs             ✓ 21/21（参考价按元不按券、改外链真落库、筛选真生效）
-node scripts/_probe-user.mjs             ✓ 25/25（账实相符、家长锁不泄露、调余额两道守卫）
+node scripts/_probe-user.mjs             ✓ 29/29（账实相符、家长锁不泄露、调余额两道守卫、账号类型筛选）
 node scripts/_probe-reset-password.mjs   ✓ 18/18（旧密码登不上、新密码能登上、旧令牌作废）
 node scripts/_run-all-probes.mjs         ✓ 六条全绿（顺序跑，中间留 6s 避开限流）
 python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 3/14）
@@ -478,7 +484,7 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 | 菜单 | 页面 | 接口封装 | 探针 |
 |---|---|---|---|
 | 商城运营 → 经营看板 | `web/src/view/mall/dashboard/index.vue` | `web/src/api/mallDashboard.js` | `scripts/_probe-dashboard.mjs`（13） |
-| 商城运营 → App 用户 | `web/src/view/mall/user/index.vue` | `web/src/api/tfUser.js` | `scripts/_probe-user.mjs`（25）+ `scripts/_probe-reset-password.mjs`（18） |
+| 商城运营 → App 用户 | `web/src/view/mall/user/index.vue` | `web/src/api/tfUser.js` | `scripts/_probe-user.mjs`（29）+ `scripts/_probe-reset-password.mjs`（18） |
 | 商城运营 → 招商审核 | `web/src/view/mall/merchant/index.vue` | `web/src/api/mallMerchant.js` | — |
 | 商城运营 → 兑换商城 | `web/src/view/mall/redeem/index.vue` | `web/src/api/mallRedeem.js` | `scripts/_probe-redeem.mjs`（18） |
 | 商城运营 → 心愿商城 | `web/src/view/mall/wish/index.vue` | `web/src/api/mallWish.js` | `scripts/_probe-wish.mjs`（20） |
@@ -518,7 +524,7 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 `seed-menu.py` 里那张 `PAGES` 表**会先看 `.vue` 在不在**，不在就跳过 ——
 所以可以提前把还没写的页面列进去，它不会建出「点进去空白」的菜单。
 
-> ★★ **写探针时最容易红错地方的五件事**（前两条 `_admin-lib.mjs` 已处理）：
+> ★★ **写探针时最容易红错地方的六件事**（1、2、6 三条 `_admin-lib.mjs` 已处理）：
 > 1. **点按钮点到了隐藏页签里的同名按钮**。`el-tab-pane` 是 v-show，
 >    隐藏页签的按钮照样在 DOM 里、`innerText` 照样有字。`clickByText`
 >    现在先按「占面积」过滤（不能用 `offsetParent`：`position:fixed`
@@ -542,6 +548,19 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 >    试前 3 个，第一个真有流水的当目标」，目标不在第一页就用手机号筛出来
 >    （**不能按昵称**：游客全叫「小客人」，筛出来一堆会点到别人身上，
 >    而两个人钱包都是 0，点错了照样全绿）。
+>
+> 6. **★★ 第三方站点把整个套件拖红**。GVA 首页那张「提交记录」卡会去
+>    `api.github.com` 拉 commit，而 Chrome 走系统代理（本机 7897）——
+>    实测**直连 200、走代理 403**。403 ⇒ axios reject ⇒ 没人 catch ⇒
+>    `pageerror` ⇒ **五条探针一起红在「没有页面级报错」上**，报的还只有
+>    `AxiosError$1` 一个字的线索（`String(e)` 对 axios 的错就是这样）。
+>    表现最阴的地方：**代码一行没改、开关一下代理，套件从全绿变全红**，
+>    而接口日志里 0 个 4xx / 5xx —— 很容易误判成「我改坏了」。
+>    `openAdmin()` 现在用请求拦截把**所有非本机请求**就地回个空壳
+>    （JSON → `[]`、图片 → 1×1 透明 PNG），一条都不真发出去。
+>    ⚠️ 空壳**必须自己带 `Access-Control-Allow-Origin`**：跨域回包没这个头，
+>    Chrome 按 CORS 拦成 `net::ERR_FAILED`，axios 照样 reject，
+>    看起来像「stub 没生效」。
 >
 > ★ 还有一条：这一页的筛选**不是即时的**，选完要再点「查询」才发请求。
 > 不点的话请求体一个都不会发 —— 页面上那个下拉已经显示「已取消」了，

@@ -140,23 +140,40 @@ try {
   ok('★ 搜得到刚建的账号', true)
 
   console.log('\n② 详情 → 重置登录密码')
-  const rowHit = await page.evaluate((m) => {
-    const tr = [...document.querySelectorAll('tbody tr.el-table__row')].find((r) =>
-      (r.innerText || '').includes(m)
-    )
-    if (!tr) return null
-    const btn = [...tr.querySelectorAll('button')].find((b) => (b.innerText || '').includes('详情'))
-    if (!btn) return null
-    const r = btn.getBoundingClientRect()
-    return { cx: Math.round(r.x + r.width / 2), cy: Math.round(r.y + r.height / 2) }
-  }, mobile)
-  if (!rowHit) throw new Error('那一行里找不到「详情 / 流水」按钮')
-  await page.mouse.click(rowHit.cx, rowHit.cy)
-  await page.waitForFunction(() => !!document.querySelector('[data-reset-open]'), { timeout: 20000 })
+  /* ★★ 这一步是**间歇性**点不中的：坐标算好之后表格还会重渲染一次
+     （查询回包后 el-table 重排），点下去落在空白上，什么都不会发生，
+     然后 20 秒后报 `Waiting failed: 20000ms exceeded` ——
+     和「按钮没渲染」「弹窗没开」长得一模一样，实测红了两次、第三次自己好了。
+     所以：点 → 短等 → 没开就重来，最多 3 次；三次都没开就**带着当时的
+     弹窗 / 表格状态**报错（`a.waitFor` 会把快照写进错误里）。 */
+  const detailReady = () => !!document.querySelector('[data-reset-open]')
+  let opened = false
+  for (let attempt = 0; attempt < 3 && !opened; attempt++) {
+    const rowHit = await page.evaluate((m) => {
+      const tr = [...document.querySelectorAll('tbody tr.el-table__row')].find((r) =>
+        (r.innerText || '').includes(m)
+      )
+      if (!tr) return null
+      const btn = [...tr.querySelectorAll('button')].find((b) => (b.innerText || '').includes('详情'))
+      if (!btn) return null
+      const r = btn.getBoundingClientRect()
+      return { cx: Math.round(r.x + r.width / 2), cy: Math.round(r.y + r.height / 2) }
+    }, mobile)
+    if (!rowHit) throw new Error('那一行里找不到「详情 / 流水」按钮')
+    await page.mouse.click(rowHit.cx, rowHit.cy)
+    opened = await a.waitFor(detailReady, '详情弹窗里出现「重置登录密码」', {
+      timeout: 6000,
+      soft: true
+    })
+  }
+  /* 三次都没开：再等 1.5 秒让它超时 —— 只为拿到带快照的那条错误 */
+  if (!opened) await a.waitFor(detailReady, '详情弹窗里出现「重置登录密码」', { timeout: 1500 })
   ok('详情弹窗里出现「重置登录密码」', true)
 
   await clickIn('重置登录密码')
-  await page.waitForFunction(() => !!document.querySelector('[data-reset-memo]'), { timeout: 10000 })
+  await a.waitFor(() => !!document.querySelector('[data-reset-memo]'), '重置弹窗里出现备注框', {
+    timeout: 10000
+  })
   await sleep(500)
   ok('弹窗打开了（有备注框）', true)
 
