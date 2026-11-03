@@ -36,6 +36,9 @@ web/pnpm-lock.yaml
 
 # binary files
 *.exe
+# Windows 上删不掉「正在运行的 exe」时会留下一个 `xxx.exe~` 备份文件，
+# 100 MB 一个，而 `*.exe` 匹配不到它 —— 实测混进过一次提交。
+*.exe~
 
 # SQLite database files
 *.db
