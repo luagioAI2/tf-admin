@@ -54,3 +54,7 @@ server/tf-admin.exe
 server/uploads/
 server/logs/
 web/src/pathInfo.json
+
+# python 缓存（scripts/ 里的小工具会生成）
+__pycache__/
+*.pyc
