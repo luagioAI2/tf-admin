@@ -57,7 +57,7 @@
             <span class="avatar">{{ scope.row.avatar || '👤' }}</span>
           </template>
         </el-table-column>
-        <el-table-column align="left" label="昵称" min-width="130">
+        <el-table-column align="left" label="昵称" min-width="118">
           <template #default="scope">
             <span>{{ scope.row.nickname || '—' }}</span>
             <el-tag v-if="scope.row.is_guest" size="small" type="info" style="margin-left: 6px">
@@ -65,36 +65,36 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column align="left" label="手机号" width="150">
+        <el-table-column align="left" label="手机号" width="140">
           <template #default="scope">
             <!-- 这里是**明文**手机号。C 端只显示 138****8000，
                  明文只给有权限的运营看，别复制到工单 / 群里。 -->
             <span class="mono">{{ scope.row.mobile || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column align="left" label="状态" width="90">
+        <el-table-column align="left" label="状态" width="80">
           <template #default="scope">
             <el-tag :type="statusTagType(scope.row.status)">
               {{ statusText(scope.row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column align="left" label="积分" width="90">
+        <el-table-column align="left" label="积分" width="80">
           <template #default="scope">
             <span class="num">{{ scope.row.points ?? 0 }}</span>
           </template>
         </el-table-column>
-        <el-table-column align="left" label="兑换券" width="90">
+        <el-table-column align="left" label="兑换券" width="80">
           <template #default="scope">
             <span class="num">{{ scope.row.coupon ?? 0 }}</span>
           </template>
         </el-table-column>
-        <el-table-column align="left" label="钻石" width="90">
+        <el-table-column align="left" label="钻石" width="80">
           <template #default="scope">
             <span class="num">{{ scope.row.diamond ?? 0 }}</span>
           </template>
         </el-table-column>
-        <el-table-column align="left" label="家长密码" width="100">
+        <el-table-column align="left" label="家长密码" width="90">
           <template #default="scope">
             <!-- 家长不是另一种账号：同一个用户多设一个 4 位密码就能进家长区。
                  pin_known=false 表示 `user_settings` 表还没建（老库），
@@ -104,17 +104,15 @@
             <el-tag v-else size="small" type="info" effect="plain">未设</el-tag>
           </template>
         </el-table-column>
-        <el-table-column align="left" label="注册时间" width="170">
+        <!-- 19 个字符（2026-10-29 23:05:06）在 155px 会折行，172px + nowrap 才一行 -->
+        <el-table-column align="left" label="注册时间" width="172" class-name="nowrap-col">
           <template #default="scope">
             {{ formatTs(scope.row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column align="left" label="最近登录" width="170">
-          <template #default="scope">
-            {{ formatTs(scope.row.last_login_at) }}
-          </template>
-        </el-table-column>
-        <el-table-column align="left" label="操作" width="150" fixed="right">
+        <!-- ⚠️ 太窄会把「详情 / 流水」和「调余额」折成两行，看着像坏了；
+             175px + nowrap 刚好一行 -->
+        <el-table-column align="left" label="操作" width="175" fixed="right" class-name="op-col">
           <template #default="scope">
             <el-button type="primary" link @click="openDetail(scope.row)">
               详情 / 流水
@@ -456,6 +454,11 @@
   .detail .sub {
     margin: 0 0 8px;
     font-weight: 600;
+  }
+  /* 操作列 / 时间列都不折行：折了之后一格两行，看着像布局坏了 */
+  :deep(.op-col .cell),
+  :deep(.nowrap-col .cell) {
+    white-space: nowrap;
   }
   .hint {
     margin-left: 8px;
