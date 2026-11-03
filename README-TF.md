@@ -316,6 +316,27 @@ python scripts/check-mall-perms.py     # 逐个体检：哪个接口还是「权
 > 后台里把 0 当「无限」写，孩子那边就换不了了 —— 这个坑我第一版页面
 > 的提示文案就写反了。
 
+#### 心愿商城：和兑换商城**口径相反**的三处
+
+两页长得像，但照着 redeem 的直觉改就会静默错：
+
+| | 兑换商城 | 心愿商城 |
+|---|---|---|
+| 归属 | **每个孩子一份**（`redeem_item.uid`） | **全站一份**（`wish_item` 没有 uid） |
+| 价格字段 | `price`，单位 = **券** | `price_cents`，单位 = **人民币分**（6900 = 69 元），且只是**参考价** |
+| 兑换价在哪 | 就是 `price` | 在订单上：`voucher_price`（单位 = 券） |
+
+- 把 `price_cents` 当券数显示，会写出「6900 券」—— 不报错、不越界，纯错。
+- 心愿商品的列表排序和 C 端一致（**盲盒永远最前**，其次 `sort_order`）。
+  后台按 id 排的话，运营在这儿调顺序、孩子那边看到的是另一个顺序。
+- 后台只能改 **`buy_url` / `buy_label` / `archived` / `sort_order`**。
+  订单状态是孩子和家长推的（`wished → committed → confirmed → done`，
+  `cancelled` 从任何非终态都能进）。后台长出「改状态」= 能凭空扣券、退券。
+- `buy_url` **孩子看不到**，只在家长确认页出现。
+- 订单上的 `vouchers_held` 决定券在谁手里：`committed` / `confirmed` 时
+  **押在平台**，其余已经回了孩子钱包。对账只看 `status` 会把押着的券
+  算成孩子的余额，所以页面单独列了一列「券在谁手里」。
+
 ### 4.5 招商审核（2026-10-29 新增，**第一个有页面的模块**）
 
 C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提交**，
@@ -387,10 +408,17 @@ C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提
 账本：manual_adjust(500) + register_gift(100)  ✓  ← 账实相符
 扣成负数 → 被拒（insufficient balance）  ✓
 
-node scripts/_probe-dashboard.mjs        ✓ 11/11（数字和接口逐项对上）
+node scripts/_probe-dashboard.mjs        ✓ 13/13（数字和接口逐项对上，两个待处理数对账）
 node scripts/_probe-redeem.mjs           ✓ 18/18（改价真落库、测完改回原价）
+node scripts/_probe-wish.mjs             ✓ 20/20（参考价按元不按券、改外链真落库、筛选真生效）
+node scripts/_run-all-probes.mjs         ✓ 三条全绿（顺序跑，中间留 6s 避开限流）
 python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 3/14）
 ```
+
+> ★ **别连着跑探针**：后台登录和几个列表接口有频率限制，12+ 次请求连着发
+> 会返回 `too many requests`，探针会红在「有页面级报错 — AxiosError$1」
+> 这种一点线索都没有的地方，而单独跑一遍又全绿。用
+> `node scripts/_run-all-probes.mjs`，它自带间隔。
 
 ---
 
@@ -404,10 +432,11 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 
 | 菜单 | 页面 | 接口封装 | 探针 |
 |---|---|---|---|
-| 商城运营 → 经营看板 | `web/src/view/mall/dashboard/index.vue` | `web/src/api/mallDashboard.js` | `scripts/_probe-dashboard.mjs` |
+| 商城运营 → 经营看板 | `web/src/view/mall/dashboard/index.vue` | `web/src/api/mallDashboard.js` | `scripts/_probe-dashboard.mjs`（13） |
 | 商城运营 → App 用户 | `web/src/view/mall/user/index.vue` | `web/src/api/tfUser.js` | — |
 | 商城运营 → 招商审核 | `web/src/view/mall/merchant/index.vue` | `web/src/api/mallMerchant.js` | — |
-| 商城运营 → 兑换商城 | `web/src/view/mall/redeem/index.vue` | `web/src/api/mallRedeem.js` | `scripts/_probe-redeem.mjs` |
+| 商城运营 → 兑换商城 | `web/src/view/mall/redeem/index.vue` | `web/src/api/mallRedeem.js` | `scripts/_probe-redeem.mjs`（18） |
+| 商城运营 → 心愿商城 | `web/src/view/mall/wish/index.vue` | `web/src/api/mallWish.js` | `scripts/_probe-wish.mjs`（20） |
 
 这些菜单写进了 `source/system/menu.go` 的**种子**，所以**首次 `initdb`
 之后就有了**，不用手动加。已经初始化过的库要自己加一次（用
@@ -421,8 +450,11 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 |---|---|---|
 | 游戏管理 | `mallGame` | `view/mall/game/index.vue` |
 | 游戏版本 | `mallRelease` | `view/mall/release/index.vue` |
-| 心愿商城 | `mallWish` | `view/mall/wish/index.vue` |
 | 任务记录 | `mallTask` | `view/mall/task/index.vue` |
+
+> 游戏管理 / 游戏版本这两页**先别急着做**：游戏本体是打进 APK 的
+> （`kid-quest-farm-online/src/games/localGames.ts`），`game_release` 表现在是空的。
+> 做出来就是两张空表，而「空」会被读成「游戏被下掉了」。
 
 > ⚠️ **别照这张表把菜单一次性补齐**。菜单加了但 `component` 指向的
 > `.vue` 不存在时，点进去是**空白页**（前端只报一个 404 chunk），
@@ -436,10 +468,24 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 1. 写 `web/src/view/mall/<x>/index.vue` + `web/src/api/mallXxx.js`
 2. `python scripts/seed-mall.py` —— 接口登记 + casbin（否则第一屏就 403）
 3. `python scripts/seed-menu.py --only <menuName>` —— 菜单 + 菜单授权
-4. `node scripts/_probe-dashboard.mjs` 那套探针改成对应的页面，跑一遍
+4. 照 `scripts/_probe-wish.mjs` 写一条探针，`node scripts/_run-all-probes.mjs` 跑全绿
 
 `seed-menu.py` 里那张 `PAGES` 表**会先看 `.vue` 在不在**，不在就跳过 ——
 所以可以提前把还没写的页面列进去，它不会建出「点进去空白」的菜单。
+
+> ★★ **写探针时最容易红错地方的两件事**（`_admin-lib.mjs` 已经处理了）：
+> 1. **点按钮点到了隐藏页签里的同名按钮**。`el-tab-pane` 是 v-show，
+>    隐藏页签的按钮照样在 DOM 里、`innerText` 照样有字。`clickByText`
+>    现在先按「占面积」过滤（不能用 `offsetParent`：`position:fixed`
+>    的元素它的 `offsetParent` 恒为 null）。
+> 2. **选下拉项时点到了页面正文里的同名文字**。筛「已取消」时表格里
+>    本来就有一堆「已取消」标签，而它们在 DOM 里排在 body 末尾的 popper
+>    **前面** ⇒ 点到表格里，什么都不会发生，断言红成「筛选没生效」。
+>    用 `pickOption()`，它只在 `.el-select-dropdown` 里找。
+>
+> ★ 还有一条：这一页的筛选**不是即时的**，选完要再点「查询」才发请求。
+> 不点的话请求体一个都不会发 —— 页面上那个下拉已经显示「已取消」了，
+> 看着非常像后端坏了。
 
 ---
 

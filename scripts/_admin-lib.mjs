@@ -105,7 +105,27 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
   const page = await browser.newPage()
   await page.setViewport(viewport ?? { width: 1440, height: 900 })
   const errors = []
-  page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)))
+  /* ★ `String(e)` 对 axios 的错只会给出 `AxiosError$1` —— 一个字的线索都没有。
+     必须取 message（里面有 status 和 URL），再把失败的请求也记下来，
+     否则「有页面报错」这条断言红了等于没红。 */
+  const reqFails = []
+  /* 只看**本机**的请求：GVA 默认头像指向外部 CDN
+     （`qmplusimg.henrongyi.top`），离线环境每次都被 ORB 拦掉 ——
+     这种「预期内的失败」混进来，真正的 4xx 就看不见了。 */
+  const isLocal = (u) => /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/)/.test(u)
+  page.on('pageerror', (e) => {
+    const msg = e?.message ?? String(e)
+    const where = (e?.stack ?? '').split('\n').find((l) => l.includes('/src/')) ?? ''
+    errors.push(`${msg}${where ? ' @ ' + where.trim() : ''}`.slice(0, 300))
+  })
+  page.on('requestfailed', (r) => {
+    if (isLocal(r.url())) reqFails.push(`${r.method()} ${r.url()} — ${r.failure()?.errorText}`)
+  })
+  page.on('response', (r) => {
+    if (r.status() >= 400 && isLocal(r.url())) {
+      reqFails.push(`${r.status()} ${r.request().method()} ${r.url()}`)
+    }
+  })
 
   /* ★ 两个框都**可能是预填的**（GVA 会把上次登录的用户名留在表单里），
      直接 type 会拼成 `adminadmin`，然后红在「用户名或密码错误」上 ——
@@ -133,16 +153,28 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
   const clickByText = async (text, selector = 'button, a, li, span, div') => {
     const hit = await page.evaluate(
       (t, sel) => {
-        const all = [...document.querySelectorAll(sel)].filter((el) => {
+        const withRect = [...document.querySelectorAll(sel)].map((el) => ({
+          el,
+          r: el.getBoundingClientRect()
+        }))
+        /* ★ 先按「占面积」过滤：`el-tab-pane` 是 v-show 隐藏的，
+           隐藏页签里的按钮**照样在 DOM 里、innerText 照样有字**，
+           但 rect 是 0×0。不过滤的话会挑到隐藏的那个，
+           点了什么也不发生（或者直接报「找不到」）。
+           注意不能改用 `offsetParent`：`position:fixed` 的元素的
+           offsetParent 恒为 null，会把顶栏按钮全排除掉。 */
+        const all = withRect.filter((x) => x.r.width > 0 && x.r.height > 0).map((x) => x.el)
+        const match = (el) => {
           const s = (el.innerText || '').trim()
           return s === t || s.includes(t)
-        })
+        }
         const innermost = (arr) =>
           arr.filter(
             (el) => ![...el.children].some((c) => ((c.innerText || '').trim() || '').includes(t))
           )
-        const exact = innermost(all.filter((el) => (el.innerText || '').trim() === t))
-        const el = exact[0] ?? innermost(all)[0]
+        const hits = all.filter(match)
+        const exact = innermost(hits.filter((el) => (el.innerText || '').trim() === t))
+        const el = exact[0] ?? innermost(hits)[0]
         if (!el) return null
         el.scrollIntoView({ block: 'center' })
         const r = el.getBoundingClientRect()
@@ -184,11 +216,82 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
     await new Promise((r) => setTimeout(r, 600))
   }
 
+  /**
+   * 点开某个 label 的表单项里的下拉框（只找**可见**的表单项）。
+   *
+   * ★ 必须按 label 定位：同一屏常常有好几个 `placeholder="全部"` 的下拉
+   *   （分类 / 状态），按 placeholder 找会点到隔壁那个。
+   * ★ 也必须限定「可见」：Element Plus 的 `el-tab-pane` 用 v-show，
+   *   隐藏页签里的表单项照样在 DOM 里。
+   */
+  const openSelectByLabel = async (label) => {
+    const hit = await page.evaluate((t) => {
+      const items = [...document.querySelectorAll('.el-form-item')].filter(
+        (el) => el.offsetParent !== null
+      )
+      const it = items.find((el) => {
+        const l = (el.querySelector('.el-form-item__label')?.innerText || '').trim()
+        return l.replace(/[:：]\s*$/, '') === t
+      })
+      if (!it) return null
+      const box = it.querySelector('.el-select__wrapper') ?? it.querySelector('input')
+      if (!box) return null
+      const r = box.getBoundingClientRect()
+      return { cx: Math.round(r.x + r.width / 2), cy: Math.round(r.y + r.height / 2) }
+    }, label)
+    if (!hit) throw new Error(`找不到「${label}」这个下拉框`)
+    await page.mouse.click(hit.cx, hit.cy)
+    await new Promise((r) => setTimeout(r, 400))
+  }
+
+  /**
+   * 在**已经展开的下拉**里选一项。
+   *
+   * ★★ 绝对不能用 `clickByText` 选下拉项：下拉选项的文字和页面正文里的
+   *   文字**经常一模一样** —— 比如筛选「已取消」时，表格里本来就有一堆
+   *   「已取消」标签，而标签在 DOM 里排在 body 末尾的 popper **前面**，
+   *   于是点到了表格里的标签：什么都不会发生，断言会红成「筛选没生效」，
+   *   看着像后端 / 前端筛选逻辑坏了。
+   */
+  const pickOption = async (text) => {
+    const hit = await page.evaluate((t) => {
+      const dds = [...document.querySelectorAll('.el-select-dropdown')].filter(
+        (d) => d.offsetParent !== null
+      )
+      for (const dd of dds) {
+        const it = [...dd.querySelectorAll('.el-select-dropdown__item')].find(
+          (el) => (el.innerText || '').trim() === t
+        )
+        if (!it) continue
+        const r = it.getBoundingClientRect()
+        return { cx: Math.round(r.x + r.width / 2), cy: Math.round(r.y + r.height / 2) }
+      }
+      return null
+    }, text)
+    if (!hit) throw new Error(`展开的下拉里找不到选项「${text}」`)
+    await page.mouse.move(hit.cx, hit.cy)
+    await page.mouse.click(hit.cx, hit.cy)
+    await new Promise((r) => setTimeout(r, 600))
+  }
+
   const shot = async (name) => {
     mkdirSync('.e2e-scratch', { recursive: true })
     await page.screenshot({ path: `.e2e-scratch/${name}.png` })
     return `.e2e-scratch/${name}.png`
   }
 
-  return { browser, page, errors, fill, clickByText, login, openMallGroup, shot, close: () => browser.close() }
+  return {
+    browser,
+    page,
+    errors,
+    reqFails,
+    fill,
+    clickByText,
+    openSelectByLabel,
+    pickOption,
+    login,
+    openMallGroup,
+    shot,
+    close: () => browser.close()
+  }
 }

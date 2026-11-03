@@ -52,7 +52,7 @@ console.log(
 )
 
 const a = await openAdmin({ url: URL_ })
-const { page, errors } = a
+const { page, errors, reqFails } = a
 
 /** 取当前**可见**页签里的表格行（两个页签都在 DOM 里，隐藏的那个也有行） */
 const readRows = () =>
@@ -223,7 +223,11 @@ try {
   const recOwner = (recRows[0] ?? [])[1] ?? ''
   ok('★ 记录里的「孩子」也是昵称', recOwner.length > 0 && !/^#\d+$/.test(recOwner), recOwner)
 
-  ok('没有页面级报错', errors.length === 0, errors.slice(0, 2).join(' | '))
+  ok(
+    '没有页面级报错',
+    errors.length === 0,
+    [...errors, ...reqFails].slice(0, 3).join(' | ')
+  )
   console.log('  截图：' + (await a.shot('redeem')))
 } catch (e) {
   failed++

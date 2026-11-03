@@ -34,7 +34,7 @@ if (overview.code !== 0) {
 console.log(`接口真数：${JSON.stringify(overview.data)}\n`)
 
 const a = await openAdmin({ url: URL_ })
-const { page, errors } = a
+const { page, errors, reqFails } = a
 
 try {
   /* ============ ① 登录 ============ */
@@ -142,7 +142,11 @@ try {
   await new Promise((r) => setTimeout(r, 1500))
   ok('点「刷新」会重新请求看板接口', calls >= 1, `打了 ${calls} 次`)
 
-  ok('没有页面级报错', errors.length === 0, errors.slice(0, 2).join(' | '))
+  ok(
+    '没有页面级报错',
+    errors.length === 0,
+    [...errors, ...reqFails].slice(0, 3).join(' | ')
+  )
   console.log('  截图：' + (await a.shot('dashboard')))
 } catch (e) {
   failed++
