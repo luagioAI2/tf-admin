@@ -267,9 +267,19 @@ func (s *DashboardService) Overview(ctx context.Context, days int) (map[string]i
 	}
 
 	// 心愿单待办（运营视角：家长没处理的有多少）
+	//
+	// ⚠️ 这两句原来写的是 `_ = ...Count().Error` —— 把错误吞掉了。
+	// 表名 / 列名一旦写错，两个数就**永远显示 0**，而 0 看起来像一个正常的
+	// 业务结论（「今天没有待办」），没人会去查。宁可让看板整屏报错。
 	var pendingWished, pendingAction int64
-	_ = db.Model(&mall.WishOrder{}).Where("status = ?", "wished").Count(&pendingWished).Error
-	_ = db.Model(&mall.WishOrder{}).Where("status IN ?", []string{"committed", "confirmed"}).Count(&pendingAction).Error
+	if err := db.Model(&mall.WishOrder{}).Where("status = ?", "wished").Count(&pendingWished).Error; err != nil {
+		return nil, err
+	}
+	if err := db.Model(&mall.WishOrder{}).
+		Where("status IN ?", []string{"committed", "confirmed"}).
+		Count(&pendingAction).Error; err != nil {
+		return nil, err
+	}
 
 	return map[string]interface{}{
 		"days":                days,

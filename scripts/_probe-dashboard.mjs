@@ -15,7 +15,7 @@
  *   2) 前端：tf-admin/web 的 pnpm dev（8891）
  *   3) node scripts/_probe-dashboard.mjs [url]
  */
-import { adminGet, openAdmin } from './_admin-lib.mjs'
+import { adminApi, adminGet, openAdmin } from './_admin-lib.mjs'
 
 const URL_ = process.argv[2] ?? 'http://localhost:8891/'
 
@@ -102,6 +102,33 @@ try {
     Object.values(shown.cards).every((v) => num(v) === 0) &&
     Object.values(shown.facts).every((v) => num(v) === 0)
   ok('★ 不是「一片 0」（全 0 多半是接口 403 被显示成了 0）', !allZero, JSON.stringify(shown.cards))
+
+  /* ============ ④'' 两个「待处理」数和心愿单列表对账 ============
+     ★ 为什么单独对一次账：看板那两个数是**另一条代码路径**算的
+       （`Overview` 里两句 Count），和 `wish/order/list` 的筛选完全独立。
+       原来那两句写的是 `_ = ....Error`，把错误吞掉了 —— 列名一改，
+       看板永远显示 0，而 0 看起来像「今天没有待办」，没人会去查。
+       所以判据必须是「两条路径算出来一样」，不能是「界面显示了个数」。 */
+  console.log('\n④′ 待处理数对账')
+  const countWish = async (status) => {
+    const r = await adminApi('/mall/wish/order/list', { page: 1, pageSize: 1, status })
+    return r.code === 0 ? r.data.total : NaN
+  }
+  const [wished, committed, confirmed] = await Promise.all([
+    countWish('wished'),
+    countWish('committed'),
+    countWish('confirmed')
+  ])
+  ok(
+    '★ 「心愿待处理·家长没处理」= wish/order/list?status=wished 的 total',
+    want.wish_pending_wished === wished,
+    `看板 ${want.wish_pending_wished} / 列表 ${wished}`
+  )
+  ok(
+    '★ 「心愿待处理·已扣券待兑现」= committed + confirmed 的 total',
+    want.wish_pending_action === committed + confirmed,
+    `看板 ${want.wish_pending_action} / 列表 ${committed}+${confirmed}=${committed + confirmed}`
+  )
 
   /* ============ ⑤ 刷新按钮真的会重新打接口 ============ */
   console.log('\n⑤ 刷新')
