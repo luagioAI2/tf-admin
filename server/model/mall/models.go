@@ -106,7 +106,8 @@ func (GameRelease) TableName() string { return "game_release" }
 // ⚠️ 字段名全是 C 端的口径（`nickname` / `avatar` / `mobile`），
 // 不要和后台自己的 `sys_users` 混。两者是完全不同的两套账号体系：
 //   - `sys_users`     = 后台管理员（运营人员）
-//   - `user`（这里）  = C 端小程序用户（孩子/家长）
+//   - `user`（这里）  = C 端用户，一人一行；家长和孩子共用同一行
+//     （家长只是多设了一个 4 位密码，没有第二种账号）
 type PlatformUser struct {
 	BaseModel
 
@@ -138,6 +139,46 @@ type Wallet struct {
 }
 
 func (Wallet) TableName() string { return "wallet" }
+
+// PlatformUserRow 用户列表的一行：用户 + 钱包余额。
+//
+// 余额**不在 `user` 表里**（在 `wallet`），而列表页最想先看的就是余额。
+// 逐行查钱包就是 N+1；这里由 `PlatformUserService.List` 用一次
+// `uid IN (...)` 补齐。
+//
+// ⚠️ 没有钱包行的用户（从没入过账）补 0 —— 那是「还没花过」，
+//    不是「查不到」。判据别写成「余额为 0 就当成异常」。
+type PlatformUserRow struct {
+	PlatformUser
+	Points  int64 `json:"points"`
+	Coupon  int64 `json:"coupon"`
+	Diamond int64 `json:"diamond"`
+
+	/* 有没有设家长锁。
+	 *
+	 * ⚠️ 这不是「家长账号」—— 一个账号就是一个家庭，家长和孩子**共用同一个
+	 *    账号**，家长区只是被 `settings.parentPin` 这道锁挡着（见
+	 *    `docs/online-version.md` §7.20）。所以运营能看到的只有「这把锁设没设」，
+	 *    没有「家长列表」这种列表。
+	 *
+	 * PIN 本身住在 `user_settings.payload` 那段 JSON 里，这里只读出来判断
+	 * 有没有值，**不返回 PIN**（后台不需要它，泄露面越小越好）。
+	 */
+	HasPin bool `json:"has_pin"`
+	/* PinKnown=false 表示没查到（`user_settings` 表还不存在 —— 老库）。
+	   界面上显示「—」而不是「未设置」：把「不知道」画成「没有」是在撒谎。 */
+	PinKnown bool `json:"pin_known"`
+}
+
+// UserSettings 家长设置（对应 `user_settings` 表，tf-platform-api 建的）。
+//
+// 后台只读：整份 JSON 由客户端定义，后台**不解释**字段（除了判断 PIN 有没有）。
+type UserSettings struct {
+	UID     uint   `gorm:"column:uid"`
+	Payload string `gorm:"column:payload"`
+}
+
+func (UserSettings) TableName() string { return "user_settings" }
 
 // LedgerEntry 账本（对应 `ledger_entry` 表）
 type LedgerEntry struct {

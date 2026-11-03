@@ -2,6 +2,7 @@ package mall
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -230,7 +231,7 @@ func (s *GameReleaseService) Deactivate(ctx context.Context, id uint) error {
 type PlatformUserService struct{}
 
 // List C 端用户列表
-func (s *PlatformUserService) List(ctx context.Context, info request.PlatformUserSearch) (list []mall.PlatformUser, total int64, err error) {
+func (s *PlatformUserService) List(ctx context.Context, info request.PlatformUserSearch) (rows []mall.PlatformUserRow, total int64, err error) {
 	db := global.GVA_DB.WithContext(ctx).Model(&mall.PlatformUser{})
 
 	if info.Mobile != "" {
@@ -249,8 +250,76 @@ func (s *PlatformUserService) List(ctx context.Context, info request.PlatformUse
 	if info.PageSize == 0 {
 		info.PageSize = 20
 	}
-	err = db.Order("id DESC").Scopes(paginate(info.Page, info.PageSize)).Find(&list).Error
-	return
+
+	var users []mall.PlatformUser
+	if err = db.Order("id DESC").Scopes(paginate(info.Page, info.PageSize)).Find(&users).Error; err != nil {
+		return
+	}
+
+	rows = make([]mall.PlatformUserRow, 0, len(users))
+	if len(users) == 0 {
+		return rows, total, nil
+	}
+
+	/* 余额一次补齐（`uid IN (...)`），不要逐行查 ——
+	   一页 20 行就是 20 次往返，而且页面越翻越慢，看起来像「后台卡」。 */
+	uids := make([]uint, 0, len(users))
+	for _, u := range users {
+		uids = append(uids, u.ID)
+	}
+	var wallets []mall.Wallet
+	if err = global.GVA_DB.WithContext(ctx).Where("uid IN ?", uids).Find(&wallets).Error; err != nil {
+		return
+	}
+	byUID := make(map[uint]mall.Wallet, len(wallets))
+	for _, w := range wallets {
+		byUID[w.UID] = w
+	}
+	/* 家长锁：同样一次批量查 `user_settings`。
+	   ⚠️ 表可能**还不存在**（老库没跑过平台的 AutoMigrate）——
+	      这时不能整个列表跟着失败，而是把 `pin_known` 置 false，
+	      界面上显示「—」。把「不知道」画成「没设置」是在撒谎。 */
+	pinOf, pinKnown := pinStates(ctx, uids)
+
+	for _, u := range users {
+		row := mall.PlatformUserRow{PlatformUser: u, PinKnown: pinKnown}
+		if w, ok := byUID[u.ID]; ok {
+			row.Points, row.Coupon, row.Diamond = w.Points, w.Coupon, w.Diamond
+		}
+		if pinKnown {
+			row.HasPin = pinOf[u.ID]
+		}
+		rows = append(rows, row)
+	}
+	return rows, total, nil
+}
+
+/* pinStates 批量判断「这一页里谁设了家长锁」。
+ *
+ * 返回 (uid → 有没有 PIN, 这次到底查到没有)。
+ * `user_settings.payload` 是客户端定义的整份 JSON，后台只取 `parentPin` 一个键，
+ * **不返回它的值**。 */
+func pinStates(ctx context.Context, uids []uint) (map[uint]bool, bool) {
+	out := make(map[uint]bool, len(uids))
+	var settings []mall.UserSettings
+	err := global.GVA_DB.WithContext(ctx).
+		Select("uid", "payload").
+		Where("uid IN ?", uids).
+		Find(&settings).Error
+	if err != nil {
+		// 老库没有这张表：报一次就够，别把整个列表拖垮
+		return out, false
+	}
+	for _, s := range settings {
+		var m map[string]any
+		if json.Unmarshal([]byte(s.Payload), &m) != nil {
+			continue
+		}
+		if pin, ok := m["parentPin"].(string); ok && pin != "" {
+			out[s.UID] = true
+		}
+	}
+	return out, true
 }
 
 // Detail 用户详情（含钱包）

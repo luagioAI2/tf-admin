@@ -266,6 +266,16 @@ func (i *initApi) InitializeData(ctx context.Context) (context.Context, error) {
 		// ⚠️ 这份种子只在**首次 initdb** 时生效。已经初始化过的库要靠
 		// `GET /api/syncApi` + `POST /api/enterSyncApi` 补（见 README-TF §3.2），
 		// 否则接口返回 `{"code":7,"msg":"权限不足"}` —— 而页面看着完全正常。
+		// ===== App 用户（mall 模块）=====
+		//
+		// ⚠️ 这里的「用户」是 App 的用户（表 `user`），不是 GVA 自带的
+		//    `sys_users`（后台登录账号）。家长和孩子是**同一个账号** ——
+		//    家长只是多设了一个 4 位密码，所以没有「家长列表」这种接口。
+		{ApiGroup: "App用户", Method: "POST", Path: "/mall/user/list", Description: "App 用户列表"},
+		{ApiGroup: "App用户", Method: "GET", Path: "/mall/user/detail", Description: "App 用户详情"},
+		{ApiGroup: "App用户", Method: "GET", Path: "/mall/user/ledger", Description: "App 用户账本"},
+		{ApiGroup: "App用户", Method: "POST", Path: "/mall/user/adjust", Description: "调整用户余额"},
+
 		{ApiGroup: "招商", Method: "POST", Path: "/mall/merchant/list", Description: "招商申请列表"},
 		{ApiGroup: "招商", Method: "POST", Path: "/mall/merchant/review", Description: "审核招商申请"},
 		{ApiGroup: "招商", Method: "GET", Path: "/mall/merchant/pending-count", Description: "待审核数"},

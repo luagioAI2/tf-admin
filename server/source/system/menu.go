@@ -122,6 +122,7 @@ func (i *initMenu) InitializeData(ctx context.Context) (next context.Context, er
 		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["plugin"], Path: "anInfo", Name: "anInfo", Component: "plugin/announcement/view/info.vue", Sort: 5, Meta: Meta{Title: "公告管理[示例]", Icon: "scaleToOriginal"}},
 
 		// mall子菜单
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["mall"], Path: "user", Name: "appUser", Component: "view/mall/user/index.vue", Sort: 0, Meta: Meta{Title: "App 用户", Icon: "user"}},
 		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["mall"], Path: "merchant", Name: "merchant", Component: "view/mall/merchant/index.vue", Sort: 1, Meta: Meta{Title: "招商审核", Icon: "message"}},
 	}
 

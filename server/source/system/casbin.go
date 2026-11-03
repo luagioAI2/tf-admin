@@ -370,6 +370,12 @@ func (i *initCasbin) InitializeData(ctx context.Context) (context.Context, error
 		//
 		// ⚠️ 只写 api 种子不够 —— casbin 才是真正拦请求的那一层。
 		// 少了这几条，页面上点「通过」会返回 `{"code":7,"msg":"权限不足"}`。
+		// App 用户（同上：只写 api 种子不够，casbin 才是真正拦请求的那一层）
+		{Ptype: "p", V0: "888", V1: "/mall/user/list", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/user/detail", V2: "GET"},
+		{Ptype: "p", V0: "888", V1: "/mall/user/ledger", V2: "GET"},
+		{Ptype: "p", V0: "888", V1: "/mall/user/adjust", V2: "POST"},
+
 		{Ptype: "p", V0: "888", V1: "/mall/merchant/list", V2: "POST"},
 		{Ptype: "p", V0: "888", V1: "/mall/merchant/review", V2: "POST"},
 		{Ptype: "p", V0: "888", V1: "/mall/merchant/pending-count", V2: "GET"},
