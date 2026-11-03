@@ -45,6 +45,7 @@
   "/src/view/login/index.vue": "Login",
   "/src/view/mall/dashboard/index.vue": "MallDashboard",
   "/src/view/mall/merchant/index.vue": "MallMerchant",
+  "/src/view/mall/redeem/index.vue": "MallRedeem",
   "/src/view/mall/user/index.vue": "MallPlatformUser",
   "/src/view/person/person.vue": "Person",
   "/src/view/routerHolder.vue": "RouterHolder",

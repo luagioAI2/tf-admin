@@ -182,6 +182,15 @@ curl -X POST http://127.0.0.1:8890/api/enterSyncApi \
 >
 > 不注册的症状：接口返回 `{"code":7,"msg":"权限不足"}`。
 
+> ⚠️ **mall 模块里读接口不全是 POST**：`mall/dashboard/overview`、
+> `mall/user/detail`、`mall/user/ledger`、`mall/merchant/pending-count` 是 **GET**，
+> 其余是 POST。方法写错时 Gin 走 NoRoute，回的是**纯文本**
+> `404 page not found` —— 拿 `res.json()` 解析它的脚本会红在
+> `Unexpected non-whitespace character after JSON at position 4`，
+> 报错位置离真正原因四层远。`scripts/_admin-lib.mjs` 的 `adminApi`
+> 现在先看 `content-type`，不是 JSON 就把「方法 / 路径 / status / 前 120 字节」
+> 一起报出来；读接口用 `adminGet(path)`。
+
 #### 离线批量补齐（拿不到管理员密码 / 想放进部署流程）
 
 ```bash
@@ -294,6 +303,19 @@ python scripts/check-mall-perms.py     # 逐个体检：哪个接口还是「权
 > 「孩子能看到的推广位」—— C 端接口对孩子的响应里根本不返回这个字段，
 > 它只在家长确认页出现。
 
+> ⚠️ **兑换商品是按用户建的**（`redeem_item.uid`）：每个孩子一张自己的清单，
+> 价格和库存由自己家长定。所以后台列表里会同时出现几个人的同名商品 ——
+> **不是重复数据**。页面第一列「所属」就是为此存在的，别删。
+>
+> ⚠️ 后台**没有**「新建兑换商品」，也**没有**「标记已兑现」：
+> 前者是家长在 App 里做的，后者是孩子点「换到了」。别加这两个按钮，
+> 接口不存在。
+>
+> ⚠️ 库存口径（`tf-platform-api/internal/app/service/redeem_srv.go`）：
+> **`-1` = 无限；`0` = 卖光了**（`soldOut := it.Stock == 0`）。
+> 后台里把 0 当「无限」写，孩子那边就换不了了 —— 这个坑我第一版页面
+> 的提示文案就写反了。
+
 ### 4.5 招商审核（2026-10-29 新增，**第一个有页面的模块**）
 
 C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提交**，
@@ -364,6 +386,10 @@ C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提
 后台加 500 积分 → 钱包 600               ✓
 账本：manual_adjust(500) + register_gift(100)  ✓  ← 账实相符
 扣成负数 → 被拒（insufficient balance）  ✓
+
+node scripts/_probe-dashboard.mjs        ✓ 11/11（数字和接口逐项对上）
+node scripts/_probe-redeem.mjs           ✓ 18/18（改价真落库、测完改回原价）
+python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 3/14）
 ```
 
 ---
@@ -376,15 +402,16 @@ C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提
 
 ### 6.1 已有页面
 
-| 菜单 | 页面 | 接口封装 |
-|---|---|---|
-| 商城运营 → 经营看板 | `web/src/view/mall/dashboard/index.vue` | `web/src/api/mallDashboard.js` |
-| 商城运营 → App 用户 | `web/src/view/mall/user/index.vue` | `web/src/api/tfUser.js` |
-| 商城运营 → 招商审核 | `web/src/view/mall/merchant/index.vue` | `web/src/api/mallMerchant.js` |
+| 菜单 | 页面 | 接口封装 | 探针 |
+|---|---|---|---|
+| 商城运营 → 经营看板 | `web/src/view/mall/dashboard/index.vue` | `web/src/api/mallDashboard.js` | `scripts/_probe-dashboard.mjs` |
+| 商城运营 → App 用户 | `web/src/view/mall/user/index.vue` | `web/src/api/tfUser.js` | — |
+| 商城运营 → 招商审核 | `web/src/view/mall/merchant/index.vue` | `web/src/api/mallMerchant.js` | — |
+| 商城运营 → 兑换商城 | `web/src/view/mall/redeem/index.vue` | `web/src/api/mallRedeem.js` | `scripts/_probe-redeem.mjs` |
 
-这一页的菜单写进了 `source/system/menu.go` 的**种子**，所以**首次 `initdb`
-之后就有了**，不用手动加。已经初始化过的库要自己加一次（或用
-`/menu/addBaseMenu`）。
+这些菜单写进了 `source/system/menu.go` 的**种子**，所以**首次 `initdb`
+之后就有了**，不用手动加。已经初始化过的库要自己加一次（用
+`python scripts/seed-menu.py --only <menuName>`）。
 
 ### 6.2 还没有页面的模块
 
@@ -394,8 +421,6 @@ C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提
 |---|---|---|
 | 游戏管理 | `mallGame` | `view/mall/game/index.vue` |
 | 游戏版本 | `mallRelease` | `view/mall/release/index.vue` |
-| 平台用户 | `mallUser` | `view/mall/user/index.vue` |
-| 兑换商城 | `mallRedeem` | `view/mall/redeem/index.vue` |
 | 心愿商城 | `mallWish` | `view/mall/wish/index.vue` |
 | 任务记录 | `mallTask` | `view/mall/task/index.vue` |
 
