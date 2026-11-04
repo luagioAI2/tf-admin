@@ -6,7 +6,6 @@
   >
     <span>小任务农场 · 运营后台</span>
     <slot />
-    <span>家长 / 商家请用 App 的手机号和密码登录</span>
   </div>
 </template>
 

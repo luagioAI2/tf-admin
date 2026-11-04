@@ -3,11 +3,6 @@
        原版是框架自带的诊断页（Runtime / os / cpu nums / Disk 全英文），
        对家长和商家是纯噪音，所以整页改成中文，并且只留「会不会写不进数据」这件事。 -->
   <div class="p-2">
-    <div class="mb-4 text-sm text-slate-500">
-      这一页看的是服务器自己的资源占用。日常不用看；<b>磁盘写满会直接导致数据存不进去</b>，
-      所以磁盘那一栏留个心。
-    </div>
-
     <el-row :gutter="15" class="py-1">
       <el-col :span="12">
         <el-card v-if="state.os" class="state-card">

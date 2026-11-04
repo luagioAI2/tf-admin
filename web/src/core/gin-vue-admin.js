@@ -12,7 +12,6 @@ export default {
     console.log(`
        小任务农场 · 运营后台
        当前版本:v${packageInfo.version}
-       家长 / 商家用 App 的手机号和密码登录，看到什么由权限决定
     `)
   }
 }

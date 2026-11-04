@@ -1,18 +1,6 @@
 <template>
   <div>
     <div class="gva-search-box">
-      <el-alert
-        type="info"
-        :closable="false"
-        show-icon
-        style="margin-bottom: 12px"
-      >
-        <template #title>
-          这一页是唯一能把申请推到「已通过」的地方。
-          通过时必须填后台地址 —— 对方 App 里那一屏写的是
-          「审核通过后，这里会出现一个后台链接」，不给地址他就永远拿不到入口。
-        </template>
-      </el-alert>
       <el-form :inline="true" :model="searchInfo">
         <el-form-item label="角色">
           <el-select

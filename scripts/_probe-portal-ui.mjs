@@ -84,14 +84,16 @@ try {
     radios: [...document.querySelectorAll('.el-radio-button')].map((el) =>
       (el.innerText || '').trim()
     ),
-    hint: document.body.innerText.includes('通过审核')
+    hint: ['通过审核', '不用另记账号', '账号的权限'].some((w) =>
+      document.body.innerText.includes(w)
+    )
   }), ACCOUNT_SEL)
   check(shape.account, '登录页只有一个「用户名 / App 手机号」输入框')
   // ★ 这里断言的是**没有**身份切换：那个开关等于让用户自己声明权限，
   //   选错的表现是「菜单少了一半」，用户会以为申请没过。
   check(shape.radios.length === 0, '没有「管理员 / 家长 / 商家」切换',
     JSON.stringify(shape.radios))
-  check(shape.hint, '页面说明了「要先申请并通过审核」')
+  check(!shape.hint, '登录页没有解释性提示语', JSON.stringify(shape))
   await shot('01-login')
 
   // ---------- 家长登录 ----------

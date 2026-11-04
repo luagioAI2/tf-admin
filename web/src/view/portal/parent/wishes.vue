@@ -92,12 +92,6 @@
       </div>
     </div>
 
-    <el-alert type="info" :closable="false" class="hint">
-      <template #title>
-        确认兑换 / 取消都要在 App 里做：那边有券的托管与退款规则。
-        后台只用来<b>看</b>和<b>去下单</b>。
-      </template>
-    </el-alert>
   </div>
 </template>
 

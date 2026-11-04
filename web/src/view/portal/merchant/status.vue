@@ -16,9 +16,6 @@
         description="这个账号还没有商家申请记录"
         :image-size="90"
       >
-        <div class="muted center">
-          先在 App 里提交「商家入驻」申请，通过后这里才会出现店铺信息。
-        </div>
       </el-empty>
 
       <template v-else-if="app">
@@ -62,20 +59,6 @@
           :closable="false"
           class="hint"
           :title="'申请被驳回：' + (app.review_note || '没有写原因')"
-        />
-        <el-alert
-          v-else-if="app.status === 'pending'"
-          type="warning"
-          :closable="false"
-          class="hint"
-          title="还在审核中。通过之前进不来商家后台 —— 这是正常的，不是登录坏了。"
-        />
-        <el-alert
-          v-else
-          type="success"
-          :closable="false"
-          class="hint"
-          title="已通过审核。左边「我的商品」里可以上架、改价、下架自己名下的商品。"
         />
       </template>
     </el-card>

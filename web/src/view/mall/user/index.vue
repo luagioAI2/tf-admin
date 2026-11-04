@@ -1,15 +1,6 @@
 <template>
   <div>
     <div class="gva-search-box">
-      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px">
-        <template #title>
-          这里是 <b>App 的用户</b>（表 <code>user</code>）。<b>家长和孩子是同一个账号</b> ——
-          家长只是在这行上多设了一个 4 位密码（进家长区用），所以没有「家长列表」，
-          只有一张用户表，最多多一列「有没有设家长锁」。
-          菜单里另一个「用户管理」管的是 <code>sys_users</code>（后台管理员），
-          改错那边等于把自己的管理员踢掉。
-        </template>
-      </el-alert>
       <el-form :inline="true" :model="searchInfo">
         <el-form-item label="手机号">
           <el-input

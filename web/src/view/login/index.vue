@@ -1,45 +1,28 @@
 <template>
-  <!-- 配色和图标跟 App 同一套（sun-50 奶油底 + grass 绿），
-       家长 / 商家从 App 点过来要一眼认出是同一个产品。
-       单屏居中：左边表单 + 右边一块大绿底，实际看下来只是把登录框挤窄了，
-       而且那块绿占了半屏却没多讲一件事 —— 标语挪到标题下面，一屏收掉。 -->
-  <div
-    id="userLayout"
-    class="w-full min-h-screen bg-[#fffbeb] flex items-center justify-center px-6 py-10"
-  >
-    <div class="w-full max-w-sm">
-      <div class="flex flex-col items-center mb-6">
-        <img
-          src="/logo.png"
-          alt="小任务农场"
-          class="w-16 h-16 rounded-2xl shadow-md"
-        />
-        <p class="text-center text-3xl font-bold mt-4 text-[#14532d]">
-          {{ $GIN_VUE_ADMIN.appName }}
-        </p>
-        <p class="text-center text-sm text-[#15803d] mt-2">
-          完成小任务，经营大农场
-        </p>
-        <p class="text-center text-xs text-gray-500 mt-1">
-          {{ subtitle }}
-        </p>
-      </div>
+  <!-- 后台入口。
+       上一版是奶油底 + 大圆角白卡 + 饱和绿按钮 + 标语 + 两行说明，
+       整套是「母婴 / 营销页」的配方，看着俗。这一版换成中性纸 + 近黑墨 +
+       宋体标题，主色只留一小段线；不加投影、不加标语、不加解释。 -->
+  <div id="userLayout" class="login-bg">
+    <div class="login-col">
+      <header class="login-head">
+        <img src="/logo.png" alt="小任务农场" class="login-logo" />
+        <p class="login-kicker">运营后台</p>
+        <h1 class="login-title">小任务农场</h1>
+        <span class="login-rule" aria-hidden="true"></span>
+      </header>
 
-      <div class="bg-white rounded-2xl shadow-sm ring-1 ring-black/5 p-6">
-        <!-- 一个后台，**一个输入框**。
-             家长 / 商家不是另一套账号，也不是另一种「身份」——他们用的就是
-             App 的手机号和密码，登录后看到什么由 `sys_authorities` 决定。
-             所以这里没有「管理员 / 家长 / 商家」的切换：
-             那个开关等于让用户自己声明权限，选错的表现是「菜单少了一半」，
-             用户会以为自己的申请没过。 -->
+      <div class="login-panel">
+        <!-- 一个输入框按内容分路：手机号走门户登录，其余走后台登录。 -->
         <el-form
           ref="loginForm"
+          class="login-form"
           :model="loginFormData"
           :rules="rules"
           :validate-on-rule-change="false"
           @keyup.enter="submitForm"
         >
-          <el-form-item prop="account" class="mb-6">
+          <el-form-item prop="account" class="login-field">
             <el-input
               v-model="loginFormData.account"
               size="large"
@@ -48,7 +31,7 @@
             />
           </el-form-item>
 
-          <el-form-item prop="password" class="mb-6">
+          <el-form-item prop="password" class="login-field">
             <el-input
               v-model="loginFormData.password"
               show-password
@@ -59,12 +42,11 @@
           </el-form-item>
 
           <!-- 验证码只挡「用户名 + 密码」这条最容易被撞的路。
-               账号填的是手机号（App 那条路）时不显示：那条路已经有服务端的
-               bcrypt + 审核闸门，再加一层只是让家长多输一次。 -->
+               账号填的是手机号时不显示：那条路已经有服务端校验。 -->
           <el-form-item
             v-if="!isMobileInput && loginFormData.openCaptcha"
             prop="captcha"
-            class="mb-6"
+            class="login-field"
           >
             <div class="flex w-full justify-between">
               <el-input
@@ -73,7 +55,7 @@
                 size="large"
                 class="flex-1 mr-5"
               />
-              <div class="w-1/3 h-11 bg-[#f0fdf4] rounded">
+              <div class="login-captcha">
                 <img
                   v-if="picPath"
                   class="w-full h-full"
@@ -85,9 +67,9 @@
             </div>
           </el-form-item>
 
-          <el-form-item class="mb-4">
+          <el-form-item class="login-actions">
             <el-button
-              class="shadow shadow-active h-11 w-full"
+              class="login-submit"
               type="primary"
               size="large"
               :loading="submitting"
@@ -95,13 +77,6 @@
               >登 录</el-button
             >
           </el-form-item>
-
-          <div class="text-xs leading-5 text-gray-500">
-            <p>· 家长 / 商家直接用 <b>App 的手机号和密码</b>，不用另记账号。</p>
-            <p>
-              · 能看到哪些页面由<b>账号的权限</b>决定；家长 / 商家要先在 App 里申请并通过审核。
-            </p>
-          </div>
         </el-form>
       </div>
     </div>
@@ -119,9 +94,7 @@
   })
 
   const captchaRequiredLength = ref(6)
-
   const submitting = ref(false)
-  const subtitle = computed(() => '运营后台 · 家长 / 商家用 App 账号登录')
 
   // 验证函数
   //
@@ -186,8 +159,7 @@
     openCaptcha: false
   })
 
-  /** 「像不像手机号」= 去掉空格 / 横线后是 8 位以上数字（可带 +）。
-   *  像手机号就走 App 那条登录路，否则走后台用户名。 */
+  /** 「像不像手机号」= 去掉空格 / 横线后是 8 位以上数字（可带 +）。 */
   const isMobileInput = computed(() =>
     /^\+?\d{8,20}$/.test((loginFormData.account || '').replace(/[\s-]/g, ''))
   )
@@ -202,8 +174,7 @@
   const login = async () => {
     const account = (loginFormData.account || '').trim()
     if (isMobileInput.value) {
-      /* App 账号那条路：服务端按手机号找 `user`，再按**审核记录**定角色。
-         这里不传角色 —— 传了就等于让前端替服务端决定权限。 */
+      /* App 账号那条路：服务端按手机号找 `user`，再按审核记录定角色。 */
       return await userStore.PortalLoginIn({
         mobile: account,
         password: loginFormData.password
@@ -220,7 +191,6 @@
     if (submitting.value) return
     loginForm.value.validate(async (v) => {
       if (!v) {
-        // 未通过前端静态验证
         ElMessage({
           type: 'error',
           message: '请正确填写登录信息',
@@ -231,16 +201,11 @@
 
       submitting.value = true
       try {
-        // 通过验证，请求登陆
         const flag = await login()
-
-        // 登陆失败，刷新验证码
         if (!flag) {
           if (!isMobileInput.value) await loginVerify()
           return false
         }
-
-        // 登陆成功
         return true
       } finally {
         submitting.value = false
@@ -248,3 +213,108 @@
     })
   }
 </script>
+
+<style>
+  /* 登录页是独立路由，用全局样式即可；类名都带 login- 前缀，不会漏到别处。 */
+  .login-bg {
+    min-height: 100vh;
+    background: #fafaf9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+  }
+  .login-col {
+    width: 100%;
+    max-width: 320px;
+  }
+  .login-head {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .login-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    display: block;
+    margin: 0 auto 22px;
+  }
+  .login-kicker {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: #8a8a85;
+    margin: 0 0 10px;
+  }
+  .login-title {
+    font-family: 'Songti SC', 'Noto Serif SC', 'SimSun', serif;
+    font-size: 27px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: #16181a;
+    margin: 0;
+  }
+  .login-rule {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: #2f5d4a;
+    margin: 18px auto 0;
+  }
+  .login-panel {
+    background: #ffffff;
+    border: 1px solid #e7e5e4;
+    border-radius: 2px;
+    padding: 26px 26px 20px;
+  }
+  .login-form .el-form-item {
+    margin-bottom: 20px;
+  }
+  .login-form .el-form-item__content {
+    line-height: normal;
+  }
+  .login-form .el-input__wrapper {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    border-bottom: 1px solid #d6d3d1 !important;
+    border-radius: 0 !important;
+    padding: 0 2px !important;
+  }
+  .login-form .el-input__wrapper.is-focus {
+    border-bottom-color: #16181a !important;
+  }
+  .login-form .el-input__inner {
+    height: 44px;
+    font-size: 14px;
+    color: #16181a;
+  }
+  .login-form .el-input__inner::placeholder {
+    color: #a8a29e;
+  }
+  .login-captcha {
+    width: 33%;
+    height: 44px;
+    border: 1px solid #e7e5e4;
+    overflow: hidden;
+  }
+  .login-actions {
+    margin-top: 30px;
+    margin-bottom: 0 !important;
+  }
+  .login-submit.el-button {
+    width: 100%;
+    height: 42px;
+    background: #16181a !important;
+    border-color: #16181a !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: 0.2em;
+    color: #ffffff;
+  }
+  .login-submit.el-button:hover {
+    background: #303336 !important;
+    border-color: #303336 !important;
+  }
+</style>

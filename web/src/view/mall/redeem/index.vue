@@ -1,14 +1,5 @@
 <template>
   <div>
-    <el-alert type="info" :closable="false" show-icon class="tip">
-      <template #title>
-        兑换商品是<b>每个孩子自己的一份清单</b>（价格、库存都由自己家长定），
-        所以列表里会同时出现好几个人的商品 —— 先看「所属」那一列。
-        后台只能<b>改价 / 改库存 / 上下架</b>；新建商品和「标记已兑现」是
-        App 里家长自己做的事，这里没有入口（接口也没有）。
-      </template>
-    </el-alert>
-
     <el-tabs v-model="tab" class="tabs">
       <!-- ==================== ① 商品 ==================== -->
       <el-tab-pane label="兑换商品" name="item">
@@ -230,7 +221,7 @@
         </el-form-item>
         <el-form-item label="价格（券）">
           <el-input-number v-model="editForm.price" :min="1" :max="100000" :step="1" />
-          <div class="hint">1 兑换券 = 1 分，和 App 里显示的数字一致。</div>
+          <div class="hint">1 兑换券 = 1 分。</div>
         </el-form-item>
         <el-form-item label="库存">
           <el-input-number v-model="editForm.stock" :min="-1" :max="100000" :step="1" />

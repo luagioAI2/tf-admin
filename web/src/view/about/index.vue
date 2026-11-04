@@ -16,11 +16,6 @@
         </div>
       </template>
 
-      <p class="text-sm leading-7 text-slate-600">
-        孩子在家里完成小任务（收拾玩具、按时睡觉……）拿到积分，用积分在兑换商城里换奖品；
-        家长负责许愿和确认兑现，商家负责把自己的商品上架，运营负责审核和上架。
-      </p>
-
       <el-divider content-position="left">四个入口</el-divider>
       <el-table :data="entrances" size="small" border>
         <el-table-column prop="who" label="谁" width="140" />
@@ -28,18 +23,9 @@
         <el-table-column prop="what" label="能做什么" />
       </el-table>
 
-      <el-divider content-position="left">账号</el-divider>
-      <ul class="list-disc pl-5 text-sm leading-7 text-slate-600">
-        <li>家长 / 商家<b>不另开账号</b>：用的就是 App 的手机号和密码，先在 App 里提交申请，通过审核后就能登录这里。</li>
-        <li>登录后看到哪些页面由<b>账号的权限</b>决定，登录页不需要选身份。</li>
-        <li>运营账号由后台的「用户管理」创建。</li>
-      </ul>
-
       <el-divider content-position="left">数据</el-divider>
       <p class="text-sm leading-7 text-slate-600">
-        孩子、积分、兑换、心愿这些数据都在平台库里，和 App 是同一份；
-        后台自己的账号、菜单、权限是另一套表。所以「用户管理」里的人数
-        不等于 App 的家长人数 —— App 用户请看「商城运营 → App 用户」。
+        孩子、积分、兑换、心愿与 App 共用一份库；后台账号、菜单、权限是另一套表。
       </p>
     </el-card>
   </div>

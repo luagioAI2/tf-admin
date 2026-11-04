@@ -45,7 +45,7 @@
             >
               {{ row.buy_label || '打开' }} ↗
             </el-link>
-            <span v-else class="muted">没填（家长看不到「去下单」）</span>
+            <span v-else class="muted">未填</span>
           </template>
         </el-table-column>
 
@@ -73,7 +73,7 @@
 
       <el-empty
         v-if="!loading && !rows.length"
-        description="还没有商品。点「上架新商品」加一件。"
+        description="还没有商品。"
         :image-size="80"
       />
 
@@ -97,19 +97,19 @@
         </el-form-item>
         <el-form-item label="表情">
           <el-input v-model="form.emoji" maxlength="4" class="short" placeholder="🎁" />
-          <span class="muted ml">孩子列表里显示的那个小图标</span>
+          <span class="muted ml">商品图标</span>
         </el-form-item>
         <el-form-item label="店铺名">
           <el-input v-model="form.partnerName" maxlength="30" placeholder="显示在商品旁边" />
         </el-form-item>
         <el-form-item label="参考价">
           <el-input v-model="form.priceYuan" class="short" placeholder="199.00" />
-          <span class="muted ml">元；只是给家长参考，不影响扣券</span>
+          <span class="muted ml">元，仅供参考</span>
         </el-form-item>
         <el-form-item label="购买链接">
           <el-input v-model="form.buyUrl" placeholder="https://…" />
           <div class="muted">
-            必须是 http(s)。家长在「心愿单」里点「去下单」会打开这个地址。
+            必须是 http(s) 开头的地址。
           </div>
         </el-form-item>
         <el-form-item label="链接文字">
@@ -123,7 +123,7 @@
         </el-form-item>
         <el-form-item label="排序">
           <el-input-number v-model="form.sortOrder" :min="0" :max="999" />
-          <span class="muted ml">小的排前面</span>
+          <span class="muted ml">数值小的排前面</span>
         </el-form-item>
       </el-form>
 

@@ -63,17 +63,11 @@
 
       <el-empty
         v-if="!loading && !(n.recent ?? []).length"
-        description="还没有心愿。孩子可以在 App 里许愿。"
+        description="还没有心愿。"
         :image-size="80"
       />
     </el-card>
 
-    <el-alert type="info" :closable="false" class="hint">
-      <template #title>
-        这一屏是<b>只读</b>的。确认、回绝、取消都在 App 里做 —— 那里有完整的
-        托管和退款规则；后台再实现一遍，两份规则迟早对不上。
-      </template>
-    </el-alert>
   </div>
 </template>
 

@@ -72,7 +72,15 @@ try {
   check(!head.text.includes('前往初始化'), '没有「前往初始化」入口')
   // 图标没加载出来时是 0×0，页面照样「不报错」——只有 naturalWidth 能看出来
   check(head.logo && head.logo.w > 0, '图标加载出来了', JSON.stringify(head.logo))
-  check(head.text.includes('完成小任务'), '页面有产品标语，不是框架的演示图')
+  /* 登录页不写「解释性提示语」：标语、账号从哪来、权限怎么定、先申请再审核。
+     这些话放登录页就是营销腔；真需要时，服务端在登录报错里说。 */
+  const HINT_WORDS = [
+    '完成小任务', '经营大农场', '不用另记账号', '申请并通过审核',
+    '账号的权限', '请用 App', '用 App 的手机号和密码登录', '看到什么由权限决定',
+    '运营后台 · 家长'
+  ]
+  const leftHints = HINT_WORDS.filter((w) => head.text.includes(w))
+  check(leftHints.length === 0, '登录页没有标语和解释性提示语', leftHints.join(','))
 
   /* 单屏居中：原版是「左边表单 + 右边半屏大绿块」，那块绿占了一半屏幕却
      没多讲一件事。判据读**渲染结果**，不读源码里有没有某个 class。 */
@@ -107,9 +115,17 @@ try {
         .trim()
     }
   })
+  /* 入口单独收敛成「中性纸 + 近黑墨」，但整个后台的主色链不能断：
+     `app.js` primaryColor → setBodyPrimaryColor() 内联变量 → 其它页面的按钮。
+     所以两条都钉：全局变量仍是农场绿，登录按钮是墨色。 */
   check(
-    brand.bg === 'rgb(21, 128, 61)',
-    '主按钮是农场绿 #15803d（不是框架默认的蓝）',
+    brand.primary === '#15803d',
+    '全局主色仍是农场绿 #15803d（三段链没断）',
+    JSON.stringify(brand)
+  )
+  check(
+    brand.bg === 'rgb(22, 24, 26)',
+    '登录按钮是近黑墨色，不是饱和绿',
     JSON.stringify(brand)
   )
   await shot('brand-01-login')
@@ -184,6 +200,12 @@ try {
   const home = await a.page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '))
   check(home.includes('常用入口'), '首页有「常用入口」')
   check(!home.includes('购买商业授权'), '首页没有「购买商业授权」')
+  check(
+    !['这里是「小任务农场」的后台', '只显示这个账号', '上面的数字来自 App'].some((w) =>
+      home.includes(w)
+    ),
+    '首页没有解释性说明文字'
+  )
   check(!FRAMEWORK_WORDS.some((w) => home.includes(w)), '首页正文没有框架字样')
   await shot('brand-02-dashboard')
 
@@ -191,7 +213,8 @@ try {
   console.log('\n== 5. 页脚 ==')
   const foot = await a.page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '))
   check(!foot.includes('Powered by'), '页脚没有「Powered by」')
-  check(foot.includes('家长 / 商家请用 App 的手机号和密码登录'), '页脚写清了账号从哪儿来')
+  check(!foot.includes('家长 / 商家请用 App'), '页脚没有解释性提示语')
+  check(foot.includes('小任务农场 · 运营后台'), '页脚只留产品名')
 
   // ---------- ⑤·5 用户管理 ----------
   /* 后端列表把 `app_*` 影子账号挡掉了（家长 / 商家第一次登录自动建的那些）。
@@ -244,6 +267,7 @@ try {
   const jargon = ['Runtime', 'cpu nums', 'MountPoint', 'goroutine nums', 'physical number of cores']
   const left = jargon.filter((w) => st.includes(w))
   check(left.length === 0, '运行状态页没有英文技术字段', left.join(' | '))
+  check(!st.includes('这一页看的是'), '运行状态页没有说明文字')
   check(
     ['服务运行', '磁盘', 'CPU', '内存'].every((w) => st.includes(w)),
     '四张卡都在（服务运行 / 磁盘 / CPU / 内存）',

@@ -1,15 +1,5 @@
 <template>
   <div>
-    <el-alert type="info" :closable="false" show-icon class="tip">
-      <template #title>
-        心愿商品是<b>全站一份</b>（不像兑换商品那样每个孩子一份），
-        所以这里没有「所属」，看到的就是所有人共享的那份清单。
-        商品本身在这里<b>增 / 改 / 删 / 上下架</b>都能做；
-        但<b>订单状态</b>不在这里改 —— 它是孩子和家长在 App 里推的
-        （想要 → 兑换 → 家长下单 → 收到货），后台能改状态就等于能凭空扣券、退券。
-      </template>
-    </el-alert>
-
     <el-tabs v-model="tab" class="tabs">
       <!-- ==================== ① 商品 ==================== -->
       <el-tab-pane label="心愿商品" name="item">

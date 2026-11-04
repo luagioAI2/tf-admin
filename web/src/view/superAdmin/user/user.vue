@@ -5,7 +5,7 @@
          后端列表已经把那些行挡掉了（删了会让人下次登录换壳、权限全丢）。
          运营在这儿找不到某个家长时，得告诉他去「商城运营 → App 用户」。 -->
     <warning-bar
-      title="注：这里只列后台账号；家长 / 孩子这些 App 用户请看「商城运营 → App 用户」。右上角头像下拉可切换角色。"
+      title="这里只列后台账号；App 用户请看「商城运营 → App 用户」。"
     />
     <div class="gva-search-box">
       <el-form ref="searchForm" :inline="true" :model="searchInfo">

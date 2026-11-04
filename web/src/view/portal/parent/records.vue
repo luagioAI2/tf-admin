@@ -57,7 +57,7 @@
 
       <el-empty
         v-if="!loading && !rows.length"
-        description="还没有兑换记录。积分可以在 App 的兑换商城里用掉。"
+        description="还没有兑换记录。"
         :image-size="80"
       />
 
