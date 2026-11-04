@@ -148,7 +148,12 @@ try {
       const el = document.querySelector(sel)
       return el ? (el.innerText || '').replace(/\s+/g, ' ').trim() : null
     }
-    return { header: pick('.fixed.top-0'), aside: pick('.el-menu') }
+    const active = document.querySelector('.el-menu-item.is-active')
+    return {
+      header: pick('.fixed.top-0'),
+      aside: pick('.el-menu'),
+      activeBg: active ? getComputedStyle(active).backgroundColor : null
+    }
   })
 
   check(shell.header !== null, '找得到顶栏（否则下面两条等于没测）', JSON.stringify(shell.header))
@@ -168,6 +173,12 @@ try {
     check(!(shell.aside ?? '').includes(g), `侧边栏没有「${g}」`)
   }
   check((shell.aside ?? '').includes('商城运营'), '侧边栏还有「商城运营」（没把业务菜单一起藏掉）')
+  check(!(shell.aside ?? '').includes('编程辅助'), '侧边栏没有框架的「编程辅助」开发组')
+  check(
+    shell.activeBg === 'rgb(22, 24, 26)',
+    '侧边栏选中项是近黑墨色，不是饱和绿',
+    JSON.stringify(shell.activeBg)
+  )
 
   // ---------- ④ 首页四个数 ----------
   console.log('\n== 4. 首页 ==')

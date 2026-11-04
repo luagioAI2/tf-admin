@@ -17,7 +17,8 @@
 
   .is-active {
     @apply rounded text-white;
-    background: var(--el-color-primary);
+    /* 选中态统一走近墨，不用主色绿：绿色块在后台里太跳 */
+    background: #16181a;
     color: #ffffff !important;
   }
 }
@@ -96,7 +97,8 @@
   .el-menu-item {
     border-radius: 2px;
     &.is-active {
-      background-color: var(--el-color-primary) !important;
+      /* 跟登录页同一支近墨：侧边栏选中项不再是一块饱和绿 */
+      background-color: #16181a !important;
       color: #fff !important;
     }
   }
@@ -112,12 +114,12 @@
 
 .el-sub-menu.is-active {
   > .el-sub-menu__title {
-    color: var(--el-color-primary) !important;
+    color: #16181a !important;
   }
 }
 
 .el-menu-item.is-active{
-  color: var(--el-color-primary)!important;
+  color: #16181a!important;
 }
 
 .el-sub-menu__title.el-tooltip__trigger,
