@@ -56,6 +56,8 @@ MERCH_A = "+8619900000201"
 MERCH_B = "+8619900000202"
 PENDING = "+8619900000301"     # 只申请了家长、状态 pending
 DUAL = "+8619900000401"        # 家长和商家都申请了（第 8 段临时造）
+REVIEWED = "+8619900000501"    # 第 9 段：走**审核接口**通过的那条
+REJECTED = "+8619900000502"    # 第 9 段：被驳回的那条
 PROBE_MOBILE_PREFIX = "+861990000"
 
 ITEM_A = "probe_goods_merchant_a"
@@ -550,6 +552,69 @@ def run_checks(conn, pa, pb, ma, mb, pend):
         _s, dd = http("POST", BASE + "/mall/portal/merchant/items",
                       {"page": 1, "pageSize": 5}, d_tok)
         check("权限不足" in str(dd.get("msg", "")), "掉回家长后调商家接口被拒", str(dd))
+
+    # ---------- 9. 审核接口 → 真的能登（中间那根线） ----------
+    #
+    # ★ 前面几段都是**直接写库**把 status 改成 approved 的，等于跳过了运营真正走的那一步。
+    # 这一段走 `POST /mall/merchant/review` —— 它是唯一能把申请推到 approved 的地方。
+    # 写错一个字段（status 拼错 / 忘了回填 admin_url / `autoUpdateTime:false` 却没手写
+    # reviewed_at），症状都是「运营点了通过，对方还是登不上」，而两端探针各自都是绿的。
+    print("\n== 9. 审核 → 登录 ==")
+    rv = ensure_platform_user(REVIEWED, PW)
+    set_application(conn, rv, "merchant", "pending")
+    conn.commit()
+    app_id = conn.execute(
+        "SELECT id FROM merchant_application WHERE uid=? AND role='merchant'", (rv,)
+    ).fetchone()[0]
+
+    _s, d = http("POST", BASE + "/mall/merchant/review",
+                 {"id": app_id, "approve": True,
+                  "admin_url": "https://example.com/admin", "note": "探针"}, a_tok2)
+    check(isinstance(d, dict) and d.get("code") == 0, "运营点「通过」成功", str(d))
+    row = conn.execute(
+        "SELECT status, admin_url, reviewed_at FROM merchant_application WHERE id=?", (app_id,)
+    ).fetchone()
+    check(row is not None and row[0] == "approved", "落库 status = approved", str(row))
+    check(row is not None and row[1] == "https://example.com/admin", "后台地址回填了", str(row))
+    check(row is not None and row[2] > 0, "reviewed_at 写了（autoUpdateTime:false ⇒ 必须手写）", str(row))
+
+    _s, d = http("POST", BASE + "/base/appLogin", {"mobile": REVIEWED, "password": PW})
+    ok = isinstance(d, dict) and d.get("code") == 0
+    check(ok, "★ 刚审核通过的人**立刻能登**（中间那根线）", str(d))
+    if ok:
+        check(d["data"]["user"].get("authorityId") == 1002,
+              "进去就是商家角色", str(d["data"]["user"].get("authorityId")))
+
+    # 再点一次：CAS 拦住，且不能把第一次的 admin_url 覆盖掉
+    _s, d = http("POST", BASE + "/mall/merchant/review",
+                 {"id": app_id, "approve": True,
+                  "admin_url": "https://example.com/admin2"}, a_tok2)
+    check(isinstance(d, dict) and d.get("code") != 0 and "已经审核" in str(d.get("msg", "")),
+          "重复审核被拒（CAS）", str(d))
+    row2 = conn.execute("SELECT admin_url FROM merchant_application WHERE id=?", (app_id,)).fetchone()
+    check(row2 is not None and row2[0] == "https://example.com/admin",
+          "重复审核没覆盖掉第一次的地址", str(row2))
+
+    # 驳回的那条：登不上，而且理由说得清
+    rj = ensure_platform_user(REJECTED, PW)
+    set_application(conn, rj, "parent", "pending")
+    conn.commit()
+    rj_id = conn.execute(
+        "SELECT id FROM merchant_application WHERE uid=? AND role='parent'", (rj,)
+    ).fetchone()[0]
+    _s, d = http("POST", BASE + "/mall/merchant/review",
+                 {"id": rj_id, "approve": False, "note": "探针拒绝"}, a_tok2)
+    check(isinstance(d, dict) and d.get("code") == 0, "运营点「拒绝」成功", str(d))
+    row = conn.execute(
+        "SELECT status, admin_url FROM merchant_application WHERE id=?", (rj_id,)
+    ).fetchone()
+    check(row is not None and row[0] == "rejected", "落库 status = rejected", str(row))
+    # 拒绝时要把上次通过写的地址清掉：留着它，C 端一旦漏判状态
+    # 就会把一个「已拒绝」的单子渲染出「打开后台」
+    check(row is not None and (row[1] or "") == "", "拒绝时清掉了后台地址", str(row))
+    _s, d = http("POST", BASE + "/base/appLogin", {"mobile": REJECTED, "password": PW})
+    check(isinstance(d, dict) and d.get("code") != 0, "被驳回的人登不上", str(d))
+    check("审核" in str(d.get("msg", "")), "拒绝理由说得清", str(d.get("msg")))
 
 
 if __name__ == "__main__":
