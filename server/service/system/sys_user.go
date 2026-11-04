@@ -92,6 +92,20 @@ func (userService *UserService) GetUserInfoList(info systemReq.GetUserList) (lis
 	db := global.GVA_DB.Model(&system.SysUser{})
 	var userList []system.SysUser
 
+	// 门户影子账号（`app_{uid}`）不进「用户管理」列表。
+	//
+	// 它们是家长 / 商家**第一次登录时自动建**的：App 里有多少个家长 / 商家，
+	// 这里就有多少行，和运营自己建的账号混在同一张表里 —— 运营打开会以为
+	// 「怎么多了一堆陌生用户」，而这些行**又不能删**（删了那个人下次登录
+	// 会换一个新壳，权限和后台地址全丢）。
+	// 要看 App 的用户请去「商城运营 → App 用户」，那是平台表 `user`，不是这张。
+	//
+	// ⚠️ 只挡「列表」。`FindUserById` / `ChangePassword` / 登录那几条路
+	// **不能挡** —— 影子账号自己登录进来要走的就是它们。
+	// ⚠️ 用 `ESCAPE` 而不是裸 `LIKE 'app_%'`：`_` 在 LIKE 里是通配符，
+	// 裸写会把运营自己建的 `apple` 这种名字也一起藏掉。
+	db = db.Where("username NOT LIKE ? ESCAPE '\\'", "app\\_%")
+
 	if info.NickName != "" {
 		db = db.Where("nick_name LIKE ?", "%"+info.NickName+"%")
 	}

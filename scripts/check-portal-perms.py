@@ -616,6 +616,33 @@ def run_checks(conn, pa, pb, ma, mb, pend):
     check(isinstance(d, dict) and d.get("code") != 0, "被驳回的人登不上", str(d))
     check("审核" in str(d.get("msg", "")), "拒绝理由说得清", str(d.get("msg")))
 
+    # ==================================================================
+    # 10. 影子账号不进「用户管理」
+    # ==================================================================
+    # 家长 / 商家第一次登录时会自动建一行 `app_{uid}` 的 sys_users。
+    # 它们和运营自己建的账号混在同一张表里 ⇒ 运营打开「用户管理」会以为
+    # 「怎么多了一堆陌生用户」；而这些行**又不能删**（删了那个人下次登录
+    # 会换一个新壳，权限和后台地址全丢）。
+    # 所以列表接口把 `app_` 前缀挡掉 —— 但**只能挡列表**：
+    # 挡到登录那条路上，症状就是「家长突然登不进来」。
+    # 这一段两个断言必须成对：① 列表里没有了；② 那个人还能登。
+    print("\n== 10. 影子账号不进「用户管理」 ==")
+    _s, d = http("POST", BASE + "/user/getUserList", {"page": 1, "pageSize": 200}, a_tok2)
+    names = [u.get("userName", "") for u in ((d.get("data") or {}).get("list", [])
+                                            if isinstance(d, dict) else [])]
+    check(isinstance(d, dict) and d.get("code") == 0, "用户管理列表接口通", str(d)[:200])
+    check(not any(n.startswith("app_") for n in names),
+          "★ 列表里没有 app_* 影子账号", str(names[:8]))
+    # 反向：不是删掉了，只是不显示。用 substr 而不是 LIKE，省得和 _ 通配符打架
+    n_shadow = conn.execute(
+        "SELECT count(*) FROM sys_users WHERE substr(username,1,4)='app_' AND deleted_at IS NULL"
+    ).fetchone()[0]
+    check(n_shadow > 0, "影子账号仍在库里（是过滤，不是删除）", "库里 %d 条" % n_shadow)
+    # ★ 中间那根线：挡列表不能把登录一起挡掉
+    _s, d = http("POST", BASE + "/base/appLogin", {"mobile": PARENT_A, "password": PW})
+    check(isinstance(d, dict) and d.get("code") == 0,
+          "★ 过滤列表之后家长照样能登（只挡列表、没挡登录）", str(d)[:200])
+
 
 if __name__ == "__main__":
     sys.exit(main())

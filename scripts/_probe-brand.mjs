@@ -174,6 +174,34 @@ try {
   check(!foot.includes('Powered by'), '页脚没有「Powered by」')
   check(foot.includes('家长 / 商家请用 App 的手机号和密码登录'), '页脚写清了账号从哪儿来')
 
+  // ---------- ⑤·5 用户管理 ----------
+  /* 后端列表把 `app_*` 影子账号挡掉了（家长 / 商家第一次登录自动建的那些）。
+     挡掉的副作用是「运营在这儿找不到某个家长」，所以页面上必须写清
+     「App 用户去哪看」。这一段验的就是那句话 + 列表里真的没有 app_ 行。 */
+  console.log('\n== 5·5 用户管理 ==')
+  await a.clickByText('超级管理员')
+  await sleep(600)
+  await a.clickByText('用户管理')
+  await a.waitFor(
+    () => [...document.querySelectorAll('button')].some((b) => (b.innerText || '').includes('新增用户')),
+    '用户管理页打开',
+    { timeout: 20000 }
+  )
+  const um = await a.page.evaluate(() => ({
+    rows: [...document.querySelectorAll('tbody tr.el-table__row')].map((r) =>
+      (r.innerText || '').replace(/\s+/g, ' ')
+    ),
+    text: document.body.innerText.replace(/\s+/g, ' ')
+  }))
+  check(um.rows.length > 0, '用户管理有行（否则下面那条恒真）', String(um.rows.length))
+  check(
+    !um.rows.some((r) => r.includes('app_')),
+    '列表里没有 app_* 影子账号',
+    um.rows.slice(0, 3).join(' | ')
+  )
+  check(um.text.includes('App 用户请看'), '页面写清了 App 用户去「商城运营」看')
+  await shot('brand-03-users')
+
   // ---------- ⑥ 干净程度 ----------
   console.log('\n== 6. 干净程度 ==')
   const errs = a.errors.filter((e) => e && !/favicon/i.test(e))
