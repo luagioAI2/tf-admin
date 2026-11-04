@@ -55,6 +55,13 @@ const (
 	AuthorityParent uint = 1001
 	// AuthorityMerchant 商家角色
 	AuthorityMerchant uint = 1002
+	// AuthorityParentMerchant 家长 + 商家（两个身份都通过审核的同一个人）
+	//
+	// `sys_user.authority_id` 只有一个值，所以「两个身份」只能是一条合并角色：
+	// 菜单和 casbin 都是 1001 ∪ 1002 的并集（见 `scripts/seed-portal.py`）。
+	// ⚠️ 别用「取其中一个」来代替 —— 少了哪一半，用户看到的都是
+	// 「我的申请没通过」，而他明明已经通过了。
+	AuthorityParentMerchant uint = 1003
 
 	// shadowPrefix 影子账号的用户名前缀。`app_{App 用户 id}`
 	//
@@ -117,10 +124,6 @@ func mobileCandidates(mobile string) []string {
 //     还在待审、被驳回的，一律不许进（这是「后台入口不能凭空发」的唯一闸门）
 //  3. 惰性建 / 复用影子 `sys_user`，角色 1001 / 1002
 func (s *PortalService) AppLogin(ctx context.Context, req mallReq.AppLoginReq) (*systemRes.LoginResponse, error) {
-	role := strings.TrimSpace(req.Role)
-	if role != PortalRoleParent && role != PortalRoleMerchant {
-		return nil, errors.New("门户类型不对")
-	}
 	mobile := normalizeMobile(req.Mobile)
 	if mobile == "" {
 		return nil, errors.New("手机号格式不对")
@@ -150,18 +153,17 @@ func (s *PortalService) AppLogin(ctx context.Context, req mallReq.AppLoginReq) (
 		return nil, errors.New("这个账号已被停用")
 	}
 
-	app, err := s.approvedApplication(ctx, cred.ID, role)
+	// 角色**不让人选**：审核记录里已经写着他是谁。
+	// 登录页只有一个输入框，多一个「我是家长 / 我是商家」的开关，
+	// 选错的表现是「菜单少了一半」，用户会以为自己的申请没通过。
+	roles, err := s.approvedRoles(ctx, cred.ID)
 	if err != nil {
 		return nil, err
 	}
-	if app == nil {
+	if len(roles) == 0 {
 		return nil, errors.New("这个账号还没有通过审核 —— 先在 App 里提交申请")
 	}
-
-	authorityID := AuthorityParent
-	if role == PortalRoleMerchant {
-		authorityID = AuthorityMerchant
-	}
+	authorityID := authorityForRoles(roles)
 	shadow, err := s.ensureShadowUser(ctx, cred.ID, cred.Nickname, mobile, authorityID)
 	if err != nil {
 		return nil, err
@@ -185,25 +187,50 @@ func (s *PortalService) AppLogin(ctx context.Context, req mallReq.AppLoginReq) (
 	}, nil
 }
 
-// approvedApplication 查「这个 uid 以这个角色通过了审核」。
+// approvedRoles 这个 uid **通过审核**的角色（parent / merchant，可能两个都有）。
 //
 // 只认 `approved`：`pending` / `rejected` 都不放行。
 // ⚠️ 别把 `rejected` 当成「没申请过」去放行 —— 被驳回的人正是最想再试一次的那个。
-func (s *PortalService) approvedApplication(ctx context.Context, uid uint, role string) (*mall.MerchantApplication, error) {
-	var app mall.MerchantApplication
-	err := global.GVA_DB.WithContext(ctx).
-		Where("uid = ? AND role = ?", uid, role).
-		Take(&app).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
-	}
+func (s *PortalService) approvedRoles(ctx context.Context, uid uint) ([]string, error) {
+	var roles []string
+	err := global.GVA_DB.WithContext(ctx).Model(&mall.MerchantApplication{}).
+		Where("uid = ? AND status = ?", uid, "approved").
+		Order("role ASC").
+		Pluck("role", &roles).Error
 	if err != nil {
 		return nil, err
 	}
-	if app.Status != "approved" {
-		return nil, nil
+	out := make([]string, 0, len(roles))
+	for _, r := range roles {
+		if r == PortalRoleParent || r == PortalRoleMerchant {
+			out = append(out, r)
+		}
 	}
-	return &app, nil
+	return out, nil
+}
+
+// authorityForRoles 角色集合 → `sys_authorities.authority_id`。
+//
+// 两个都有就是 1003（并集角色）。空集合不会走到这里（调用方已经挡了），
+// 真走到时给 1001 也只是「最保守的那一半」，不会放大权限。
+func authorityForRoles(roles []string) uint {
+	var parent, merchant bool
+	for _, r := range roles {
+		switch r {
+		case PortalRoleParent:
+			parent = true
+		case PortalRoleMerchant:
+			merchant = true
+		}
+	}
+	switch {
+	case parent && merchant:
+		return AuthorityParentMerchant
+	case merchant:
+		return AuthorityMerchant
+	default:
+		return AuthorityParent
+	}
 }
 
 // ensureShadowUser 拿（没有就建）影子 `sys_user`。

@@ -64,7 +64,7 @@ func mallLoginLog(username, ip, agent, errMsg string) system.SysLoginLog {
 // @Tags     MallPortal
 // @Summary  用 App 账号登录后台（家长 / 商家）
 // @Produce  application/json
-// @Param    data  body      mallReq.AppLoginReq                                     true  "手机号 / 密码 / 门户类型"
+// @Param    data  body      mallReq.AppLoginReq                                     true  "手机号 / 密码"
 // @Success  200   {object}  response.Response{data=systemRes.LoginResponse,msg=string}  "token 与用户信息"
 // @Router   /base/appLogin [post]
 func (a *PortalApi) AppLogin(c *gin.Context) {
@@ -77,19 +77,19 @@ func (a *PortalApi) AppLogin(c *gin.Context) {
 	res, err := portalService.AppLogin(c.Request.Context(), req)
 	if err != nil {
 		// 业务拒绝（未审核 / 密码错）不是系统故障，走 Warn 不刷 ERROR 堆栈
+		// 失败时**还不知道**对方是什么角色（可能根本没有角色），所以不记 role
 		global.GVA_LOG.Warn("门户登录被拒",
-			zap.String("role", req.Role),
 			zap.String("mobile", maskMobile(req.Mobile)),
 			zap.String("ip", c.ClientIP()),
 			zap.Error(err))
 		loginLogService.CreateLoginLog(mallLoginLog(
-			"app:"+req.Role, c.ClientIP(), c.Request.UserAgent(), err.Error()))
+			"app:"+maskMobile(req.Mobile), c.ClientIP(), c.Request.UserAgent(), err.Error()))
 		response.FailWithMessage(err.Error(), c)
 		return
 	}
 
 	global.GVA_LOG.Info("门户登录成功",
-		zap.String("role", req.Role),
+		zap.Int("authority", int(res.User.AuthorityId)),
 		zap.String("user", res.User.Username),
 		zap.String("ip", c.ClientIP()))
 	loginLogService.CreateLoginLog(mallLoginLog(res.User.Username, c.ClientIP(), c.Request.UserAgent(), ""))

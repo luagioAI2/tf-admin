@@ -55,6 +55,7 @@ PARENT_B = "+8619900000102"
 MERCH_A = "+8619900000201"
 MERCH_B = "+8619900000202"
 PENDING = "+8619900000301"     # 只申请了家长、状态 pending
+DUAL = "+8619900000401"        # 家长和商家都申请了（第 8 段临时造）
 PROBE_MOBILE_PREFIX = "+861990000"
 
 ITEM_A = "probe_goods_merchant_a"
@@ -261,18 +262,23 @@ def run_checks(conn, pa, pb, ma, mb, pend):
     # ---------- 1. 闸门：没审核过的不许进 ----------
     print("\n== 1. 审核闸门 ==")
     _s, d = http("POST", BASE + "/base/appLogin",
-                 {"mobile": PENDING, "password": PW, "role": "parent"})
+                 {"mobile": PENDING, "password": PW})
     check(isinstance(d, dict) and d.get("code") != 0, "pending 账号登录被拒", str(d))
     check("审核" in str(d.get("msg", "")), "拒绝理由是「还没通过审核」", str(d.get("msg")))
 
-    # 家长通过了，但拿家长身份登**商家**门户 —— 两个角色各审一次
+    # 请求体里塞 `role` 也不认：角色由 `merchant_application` 决定，
+    # 不由调用方声明。这条是给「有人把 role 接回去」准备的 ——
+    # 接回去之后家长只要多传一个 role=merchant 就能拿到商家权限。
     _s, d = http("POST", BASE + "/base/appLogin",
                  {"mobile": PARENT_A, "password": PW, "role": "merchant"})
-    check(isinstance(d, dict) and d.get("code") != 0, "家长账号登商家门户被拒", str(d))
+    check(isinstance(d, dict) and d.get("code") == 0, "塞 role 照样能登（字段被忽略）", str(d))
+    check(d.get("data", {}).get("user", {}).get("authorityId") == 1001,
+          "塞 role=merchant 也还是家长（角色由审核记录定）",
+          str(d.get("data", {}).get("user", {}).get("authorityId")))
 
     # 密码错
     _s, d = http("POST", BASE + "/base/appLogin",
-                 {"mobile": PARENT_A, "password": "wrong-pass", "role": "parent"})
+                 {"mobile": PARENT_A, "password": "wrong-pass"})
     check(isinstance(d, dict) and d.get("code") != 0, "密码错被拒", str(d))
     # 措辞不能泄露「这个手机号存在」
     check("不存在" not in str(d.get("msg", "")), "错误措辞不泄露账号是否存在", str(d.get("msg")))
@@ -280,7 +286,7 @@ def run_checks(conn, pa, pb, ma, mb, pend):
     # ---------- 2. 登录成功 + 影子账号 ----------
     print("\n== 2. 登录与影子账号 ==")
     _s, d = http("POST", BASE + "/base/appLogin",
-                 {"mobile": PARENT_A, "password": PW, "role": "parent"})
+                 {"mobile": PARENT_A, "password": PW})
     ok = isinstance(d, dict) and d.get("code") == 0
     check(ok, "家长登录成功", str(d))
     if not ok:
@@ -293,11 +299,11 @@ def run_checks(conn, pa, pb, ma, mb, pend):
     # 用切片而不是 lstrip('+86')：lstrip 是「去掉这些字符的任意组合」，
     # 号码里出现 8 / 6 时会被多啃掉几位，而那种错看起来像「账号不存在」。
     _s, d2 = http("POST", BASE + "/base/appLogin",
-                  {"mobile": PARENT_A[3:], "password": PW, "role": "parent"})
+                  {"mobile": PARENT_A[3:], "password": PW})
     check(isinstance(d2, dict) and d2.get("code") == 0, "手机号不带 +86 也能登", str(d2))
 
     _s, d = http("POST", BASE + "/base/appLogin",
-                 {"mobile": MERCH_A, "password": PW, "role": "merchant"})
+                 {"mobile": MERCH_A, "password": PW})
     ok = isinstance(d, dict) and d.get("code") == 0
     check(ok, "商家登录成功", str(d))
     if not ok:
@@ -307,12 +313,12 @@ def run_checks(conn, pa, pb, ma, mb, pend):
           str(d["data"]["user"].get("authorityId")))
 
     _s, d = http("POST", BASE + "/base/appLogin",
-                 {"mobile": MERCH_B, "password": PW, "role": "merchant"})
+                 {"mobile": MERCH_B, "password": PW})
     mb_tok = d["data"]["token"] if isinstance(d, dict) and d.get("code") == 0 else None
     check(bool(mb_tok), "商家 B 登录成功", str(d))
 
     _s, d = http("POST", BASE + "/base/appLogin",
-                 {"mobile": PARENT_B, "password": PW, "role": "parent"})
+                 {"mobile": PARENT_B, "password": PW})
     pb_tok = d["data"]["token"] if isinstance(d, dict) and d.get("code") == 0 else None
     check(bool(pb_tok), "家长 B 登录成功", str(d))
 
@@ -427,12 +433,12 @@ def run_checks(conn, pa, pb, ma, mb, pend):
     # defaultRouter 和菜单 name 对不上时只弹一句「不存在可以登陆的首页」，
     # 而角色本身是好的，很容易查错方向。
     _s, d = http("POST", BASE + "/base/appLogin",
-                 {"mobile": PARENT_A, "password": PW, "role": "parent"})
+                 {"mobile": PARENT_A, "password": PW})
     dr = d.get("data", {}).get("user", {}).get("authority", {}).get("defaultRouter")
     check(dr in p_names, "家长 defaultRouter 落在自己的菜单里（%s）" % dr, str(p_names))
 
     _s, d = http("POST", BASE + "/base/appLogin",
-                 {"mobile": MERCH_A, "password": PW, "role": "merchant"})
+                 {"mobile": MERCH_A, "password": PW})
     dr = d.get("data", {}).get("user", {}).get("authority", {}).get("defaultRouter")
     check(dr in m_names, "商家 defaultRouter 落在自己的菜单里（%s）" % dr, str(m_names))
 
@@ -500,6 +506,50 @@ def run_checks(conn, pa, pb, ma, mb, pend):
     check(row is not None and row[0] == 0, "显式传 0 = 收回平台自营（落库了）", str(row))
     gone = merchant_ids(m_tok)
     check(gone is not None and new_id not in gone, "收回后商家 A 的列表里没有了", str(gone))
+
+    # ---------- 8. 两个身份都通过 = 一条合并角色 ----------
+    #
+    # 登录页不再让人选身份，所以「同一个人既申请了家长又申请了商家」
+    # 必须有确定的结果。GVA 的 `authority_id` 只有一个值 ⇒ 用 1003（并集角色）。
+    # ★ 漏了这一段的表现：这种账号登录后**只看到一半菜单**，
+    #   用户会以为自己的另一半申请没过。
+    print("\n== 8. 家长 + 商家 ==")
+    dual = ensure_platform_user(DUAL, PW)
+    set_application(conn, dual, "parent", "approved")
+    set_application(conn, dual, "merchant", "approved")
+    conn.commit()
+
+    _s, d = http("POST", BASE + "/base/appLogin", {"mobile": DUAL, "password": PW})
+    ok = isinstance(d, dict) and d.get("code") == 0
+    check(ok, "双身份账号能登", str(d))
+    if ok:
+        u = d["data"]["user"]
+        check(u.get("authorityId") == 1003, "两个身份 ⇒ 角色 1003", str(u.get("authorityId")))
+        d_tok = d["data"]["token"]
+        _s, dd = http("POST", BASE + "/menu/getMenu", None, d_tok)
+        names = [n for n, _p in flatten_menu(dd.get("data", {}).get("menus") or [])]
+        check("parentOverview" in names, "并集角色看得到家长菜单", str(names))
+        check("merchantItems" in names, "并集角色看得到商家菜单", str(names))
+        # 菜单有了，casbin 没开的话点进去照样 403 —— 两边各打一枪
+        _s, dd = http("GET", BASE + "/mall/portal/parent/overview", None, d_tok)
+        check(isinstance(dd, dict) and dd.get("code") == 0, "并集角色能调家长接口", str(dd))
+        _s, dd = http("POST", BASE + "/mall/portal/merchant/items",
+                      {"page": 1, "pageSize": 5}, d_tok)
+        check(isinstance(dd, dict) and dd.get("code") == 0, "并集角色能调商家接口", str(dd))
+
+    # 撤掉商家那条审核 ⇒ 角色跟着掉回 1001（不是「保留上一次的角色」）
+    set_application(conn, dual, "merchant", "rejected")
+    conn.commit()
+    _s, d = http("POST", BASE + "/base/appLogin", {"mobile": DUAL, "password": PW})
+    ok = isinstance(d, dict) and d.get("code") == 0
+    check(ok, "撤掉商家审核后仍能登（家长还在）", str(d))
+    if ok:
+        u = d["data"]["user"]
+        check(u.get("authorityId") == 1001, "角色跟着审核记录掉回 1001", str(u.get("authorityId")))
+        d_tok = d["data"]["token"]
+        _s, dd = http("POST", BASE + "/mall/portal/merchant/items",
+                      {"page": 1, "pageSize": 5}, d_tok)
+        check("权限不足" in str(dd.get("msg", "")), "掉回家长后调商家接口被拒", str(dd))
 
 
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
 /**
- * 家长 / 商家门户的**界面**探针：登录页三个 tab、两个门户的页面到底能不能打开。
+ * 家长 / 商家门户的**界面**探针：登录页一个框、两个门户的页面到底能不能打开。
  *
  * 用法（三步，顺序不能反）：
  *
- *   # ① 造探针数据（顺手把 43 条接口判据也跑一遍）
+ *   # ① 造探针数据（顺手把接口判据也跑一遍，现在 65 条）
  *   python scripts/check-portal-perms.py --keep
  *
  *   # ② 看界面（需要 web 的 dev server 在 8891）
@@ -22,7 +22,7 @@
  *
  * # 判据
  *
- * 1. 三个 tab 都在，家长 tab 没有验证码输入框（那是管理员那条路的）
+ * 1. 登录页**只有一个输入框**、**没有身份切换**（角色由审核记录决定，不由用户声明）
  * 2. 家长登录后停在「概览」，**卡片上的数字和接口返回的一致**
  *    （只看「有卡片」不够：卡片先画 0 再填数，先看到 0 也算通过）
  * 3. 左侧点得开「心愿单」，能看到那条探针心愿
@@ -37,6 +37,9 @@ const PW = 'Probe@123456'
 const PARENT = '+8619900000101'
 const MERCH = '+8619900000201'
 const ORDER_MARK = '探针心愿-只有家长A看得到'
+/* 登录页唯一那个输入框。按 placeholder 找，别按 index ——
+   页面上还有密码框，`input` 顺序一变就填错框。 */
+const ACCOUNT_SEL = 'input[placeholder="用户名 / App 手机号"]'
 const ITEM_NAME = '探针商品A'
 const BUY_URL = 'https://example.com/probe-item'
 
@@ -67,41 +70,35 @@ const shot = async (name) => {
 }
 
 try {
-  // ---------- 登录页：三个 tab ----------
+  // ---------- 登录页：一个框 ----------
   console.log('\n== 1. 登录页 ==')
   await a.page.goto(WEB, { waitUntil: 'domcontentloaded', timeout: 60000 })
-  await a.page.waitForSelector('input[placeholder="请输入用户名"]', { timeout: 60000 })
+  await a.page.waitForSelector(ACCOUNT_SEL, { timeout: 60000 })
 
-  const tabs = await a.page.evaluate(() =>
-    [...document.querySelectorAll('.el-radio-button')].map((el) => (el.innerText || '').trim())
-  )
-  check(tabs.includes('管理员') && tabs.includes('家长') && tabs.includes('商家'),
-    '三个 tab 都在（管理员 / 家长 / 商家）', JSON.stringify(tabs))
-
-  await a.clickByText('家长')
-  await sleep(400)
-  const portalShape = await a.page.evaluate(() => ({
-    mobile: !!document.querySelector('input[placeholder^="请输入手机号"]'),
-    username: !!document.querySelector('input[placeholder="请输入用户名"]'),
-    captcha: !!document.querySelector('input[placeholder="请输入验证码"]'),
+  const shape = await a.page.evaluate((sel) => ({
+    account: !!document.querySelector(sel),
+    radios: [...document.querySelectorAll('.el-radio-button')].map((el) =>
+      (el.innerText || '').trim()
+    ),
     hint: document.body.innerText.includes('通过审核')
-  }))
-  check(portalShape.mobile, '家长 tab 有手机号输入框')
-  check(!portalShape.username, '家长 tab 不再要求用户名')
-  // 验证码只挡「用户名 + 密码」那条路；App 账号那条已经有 bcrypt + 审核
-  check(!portalShape.captcha, '家长 tab 没有验证码（走的是 App 账号）')
-  check(portalShape.hint, '家长 tab 说明了「要审核通过」')
-  await shot('01-login-parent')
+  }), ACCOUNT_SEL)
+  check(shape.account, '登录页只有一个「用户名 / App 手机号」输入框')
+  // ★ 这里断言的是**没有**身份切换：那个开关等于让用户自己声明权限，
+  //   选错的表现是「菜单少了一半」，用户会以为申请没过。
+  check(shape.radios.length === 0, '没有「管理员 / 家长 / 商家」切换',
+    JSON.stringify(shape.radios))
+  check(shape.hint, '页面说明了「要先申请并通过审核」')
+  await shot('01-login')
 
   // ---------- 家长登录 ----------
   console.log('\n== 2. 家长登录与概览 ==')
-  await a.fill('input[placeholder^="请输入手机号"]', PARENT)
+  await a.fill(ACCOUNT_SEL, PARENT)
   await a.fill('input[placeholder="请输入密码"]', PW)
   await a.clickByText('登 录')
 
   // 等的不只是「离开登录页」—— 路由进去了也可能是空白页，
   // 所以等的是「概览卡片上的数字到了」
-  const tok = (await post('/base/appLogin', { mobile: PARENT, password: PW, role: 'parent' }))
+  const tok = (await post('/base/appLogin', { mobile: PARENT, password: PW }))
   const pTok = tok?.data?.token
   check(!!pTok, '家长 token 拿到了（否则下面的数字对比没有意义）', JSON.stringify(tok))
   const ov = await fetch(API + '/mall/portal/parent/overview', {
@@ -186,10 +183,8 @@ try {
     })
   })
   await a.page.goto(WEB, { waitUntil: 'domcontentloaded' })
-  await a.page.waitForSelector('input[placeholder="请输入用户名"]', { timeout: 60000 })
-  await a.clickByText('商家')
-  await sleep(400)
-  await a.fill('input[placeholder^="请输入手机号"]', MERCH)
+  await a.page.waitForSelector(ACCOUNT_SEL, { timeout: 60000 })
+  await a.fill(ACCOUNT_SEL, MERCH)
   await a.fill('input[placeholder="请输入密码"]', PW)
   await a.clickByText('登 录')
 

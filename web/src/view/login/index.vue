@@ -24,17 +24,12 @@
               </p>
             </div>
 
-            <!-- 三种身份，一个后台。
-                 家长 / 商家**不是另一套账号**：用的是 App 的手机号和密码，
-                 登录时换出对应的角色；准入看 `merchant_application` 有没有通过审核。 -->
-            <div class="flex justify-center mb-6">
-              <el-radio-group v-model="mode" size="large" @change="onModeChange">
-                <el-radio-button value="admin">管理员</el-radio-button>
-                <el-radio-button value="parent">家长</el-radio-button>
-                <el-radio-button value="merchant">商家</el-radio-button>
-              </el-radio-group>
-            </div>
-
+            <!-- 一个后台，**一个输入框**。
+                 家长 / 商家不是另一套账号，也不是另一种「身份」——他们用的就是
+                 App 的手机号和密码，登录后看到什么由 `sys_authorities` 决定。
+                 所以这里没有「管理员 / 家长 / 商家」的切换：
+                 那个开关等于让用户自己声明权限，选错的表现是「菜单少了一半」，
+                 用户会以为自己的申请没过。 -->
             <el-form
               ref="loginForm"
               :model="loginFormData"
@@ -42,20 +37,12 @@
               :validate-on-rule-change="false"
               @keyup.enter="submitForm"
             >
-              <el-form-item v-if="!isPortal" prop="username" class="mb-6">
+              <el-form-item prop="account" class="mb-6">
                 <el-input
-                  v-model="loginFormData.username"
+                  v-model="loginFormData.account"
                   size="large"
-                  placeholder="请输入用户名"
+                  placeholder="用户名 / App 手机号"
                   suffix-icon="user"
-                />
-              </el-form-item>
-              <el-form-item v-else prop="mobile" class="mb-6">
-                <el-input
-                  v-model="loginFormData.mobile"
-                  size="large"
-                  placeholder="请输入手机号（App 登录用的那个）"
-                  suffix-icon="iphone"
                 />
               </el-form-item>
 
@@ -70,10 +57,10 @@
               </el-form-item>
 
               <!-- 验证码只挡「用户名 + 密码」这条最容易被撞的路。
-                   App 账号那条路已经有服务端的 bcrypt + 审核闸门，
-                   再加一层验证码只是让家长多输一次。 -->
+                   账号填的是手机号（App 那条路）时不显示：那条路已经有服务端的
+                   bcrypt + 审核闸门，再加一层只是让家长多输一次。 -->
               <el-form-item
-                v-if="!isPortal && loginFormData.openCaptcha"
+                v-if="!isMobileInput && loginFormData.openCaptcha"
                 prop="captcha"
                 class="mb-6"
               >
@@ -107,10 +94,10 @@
                 >
               </el-form-item>
 
-              <div v-if="isPortal" class="text-xs leading-5 text-gray-500 mb-4">
-                <p>· 用 App 注册的<b>手机号</b>和<b>密码</b>登录，不用另记账号。</p>
+              <div class="text-xs leading-5 text-gray-500 mb-4">
+                <p>· 家长 / 商家直接用 <b>App 的手机号和密码</b>，不用另记账号。</p>
                 <p>
-                  · 需要先在 App 里提交「{{ mode === 'parent' ? '家长' : '商家' }}」申请并通过审核。
+                  · 能看到哪些页面由<b>账号的权限</b>决定；家长 / 商家要先在 App 里申请并通过审核。
                 </p>
               </div>
 
@@ -176,23 +163,20 @@
   const router = useRouter()
   const captchaRequiredLength = ref(6)
 
-  // admin = 后台自己的账号；parent / merchant = App 账号 + 审核通过
-  const mode = ref('admin')
-  const isPortal = computed(() => mode.value !== 'admin')
   const submitting = ref(false)
-  const subtitle = computed(() => {
-    if (mode.value === 'parent') return '家长中心 · 用 App 账号登录'
-    if (mode.value === 'merchant') return '商家中心 · 用 App 账号登录'
-    return 'A management platform using Golang and Vue'
-  })
+  const subtitle = computed(() => '运营后台 · 家长 / 商家用 App 账号登录')
 
   // 验证函数
-  const checkUsername = (rule, value, callback) => {
-    if (value.length < 5) {
-      return callback(new Error('请输入正确的用户名'))
-    } else {
-      callback()
+  //
+  // 一个框装两种账号：后台用户名（`admin`）和 App 手机号（`13800138000`）。
+  // 这里只挡「明显不是账号」的输入 —— 手机号的口径在服务端 `normalizeMobile`，
+  // 前端再判一遍只会把「138-0013-8000」这种正常写法判错。
+  const checkAccount = (rule, value, callback) => {
+    const v = (value || '').trim()
+    if (v.length < 3) {
+      return callback(new Error('请输入用户名或手机号'))
     }
+    callback()
   }
   const checkPassword = (rule, value, callback) => {
     if (value.length < 6) {
@@ -200,16 +184,6 @@
     } else {
       callback()
     }
-  }
-  // 手机号：只做「像不像」的校验，真正的口径在服务端（`normalizeMobile`）。
-  // 这里放宽到「8 位以上数字、可带 +」—— 号码里带空格 / 横线的由服务端清，
-  // 前端提前拦会把「138-0013-8000」这种正常输入判错。
-  const checkMobile = (rule, value, callback) => {
-    const v = (value || '').replace(/[\s-]/g, '')
-    if (!/^\+?\d{8,20}$/.test(v)) {
-      return callback(new Error('请输入正确的手机号'))
-    }
-    callback()
   }
   const checkCaptcha = (rule, value, callback) => {
     if (!loginFormData.openCaptcha) {
@@ -247,44 +221,43 @@
   const loginForm = ref(null)
   const picPath = ref('')
   const loginFormData = reactive({
-    username: 'admin',
-    mobile: '',
+    /** 后台用户名 **或** App 手机号 —— 同一个框，按内容分路 */
+    account: 'admin',
     password: '',
     captcha: '',
     captchaId: '',
     openCaptcha: false
   })
 
-  // 规则跟着身份走：切到家长 / 商家时不能再要求「用户名 5 位以上」
-  const rules = computed(() => {
-    if (isPortal.value) {
-      return {
-        mobile: [{ validator: checkMobile, trigger: 'blur' }],
-        password: [{ validator: checkPassword, trigger: 'blur' }]
-      }
-    }
-    return {
-      username: [{ validator: checkUsername, trigger: 'blur' }],
-      password: [{ validator: checkPassword, trigger: 'blur' }],
-      captcha: [{ validator: checkCaptcha, trigger: 'blur' }]
-    }
-  })
+  /** 「像不像手机号」= 去掉空格 / 横线后是 8 位以上数字（可带 +）。
+   *  像手机号就走 App 那条登录路，否则走后台用户名。 */
+  const isMobileInput = computed(() =>
+    /^\+?\d{8,20}$/.test((loginFormData.account || '').replace(/[\s-]/g, ''))
+  )
 
-  // 切身份时把上一种身份的红字清掉（否则「用户名太短」会挂在手机号那一栏旁边）
-  const onModeChange = () => {
-    loginForm.value?.clearValidate()
+  const rules = {
+    account: [{ validator: checkAccount, trigger: 'blur' }],
+    password: [{ validator: checkPassword, trigger: 'blur' }],
+    captcha: [{ validator: checkCaptcha, trigger: 'blur' }]
   }
 
   const userStore = useUserStore()
   const login = async () => {
-    if (isPortal.value) {
+    const account = (loginFormData.account || '').trim()
+    if (isMobileInput.value) {
+      /* App 账号那条路：服务端按手机号找 `user`，再按**审核记录**定角色。
+         这里不传角色 —— 传了就等于让前端替服务端决定权限。 */
       return await userStore.PortalLoginIn({
-        mobile: loginFormData.mobile,
-        password: loginFormData.password,
-        role: mode.value
+        mobile: account,
+        password: loginFormData.password
       })
     }
-    return await userStore.LoginIn(loginFormData)
+    return await userStore.LoginIn({
+      username: account,
+      password: loginFormData.password,
+      captcha: loginFormData.captcha,
+      captchaId: loginFormData.captchaId
+    })
   }
   const submitForm = () => {
     if (submitting.value) return
@@ -306,7 +279,7 @@
 
         // 登陆失败，刷新验证码
         if (!flag) {
-          if (!isPortal.value) await loginVerify()
+          if (!isMobileInput.value) await loginVerify()
           return false
         }
 

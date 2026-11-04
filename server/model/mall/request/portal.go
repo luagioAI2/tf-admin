@@ -11,10 +11,14 @@ import (
 // ⚠️ 这里没有 `username`：App 账号的身份就是手机号，后台的 `sys_user`
 // 是登录时**惰性生成**的影子行（`app_{uid}`），不是给人记的账号。
 // 让家长多记一个「后台用户名」等于多一个会忘、会丢的东西。
+//
+// ⚠️ 这里也**没有 `role`**：登录页只有一个输入框，不让人自己选身份。
+// 「你是家长还是商家」这件事，`merchant_application` 里已经写着（审核通过的那几条），
+// 让用户再选一次只会选错 —— 而且选错的表现是「菜单少了一半」，
+// 用户会以为自己的申请没通过。角色由服务端按审核记录取并集。
 type AppLoginReq struct {
-	Mobile   string `json:"mobile" binding:"required"`                     // 手机号（带不带 +86 都行）
-	Password string `json:"password" binding:"required"`                   // App 的登录密码
-	Role     string `json:"role" binding:"required,oneof=parent merchant"` // 走哪个门户
+	Mobile   string `json:"mobile" binding:"required"`   // 手机号（带不带 +86 都行）
+	Password string `json:"password" binding:"required"` // App 的登录密码
 }
 
 // ============================ 家长端 ============================

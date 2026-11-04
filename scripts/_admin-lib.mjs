@@ -248,8 +248,12 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
 
   const login = async () => {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 })
-    await page.waitForSelector('input[placeholder="请输入用户名"]', { timeout: 60000 })
-    await fill('input[placeholder="请输入用户名"]', ADMIN.username)
+    /* ★ 用 `*=` 而不是 `=`：登录页只有一个「用户名 / App 手机号」输入框，
+       文案改一次（比如这次去掉「管理员 / 家长 / 商家」切换）就会让
+       **所有**后台探针红在「等不到输入框」上，而它们和登录页毫无关系。 */
+    const ACCOUNT = 'input[placeholder*="用户名"]'
+    await page.waitForSelector(ACCOUNT, { timeout: 60000 })
+    await fill(ACCOUNT, ADMIN.username)
     await fill('input[placeholder="请输入密码"]', ADMIN.password)
     const captcha = await page.evaluate(
       () => !!document.querySelector('input[placeholder="请输入验证码"]')

@@ -10,7 +10,7 @@
 
 | 表 | 作用 | 少写会怎样 |
 | --- | --- | --- |
-| `sys_authorities` | 角色 1001 家长 / 1002 商家 | 影子账号挂到不存在的角色 ⇒ 登录成功、进去一片空白 |
+| `sys_authorities` | 角色 1001 家长 / 1002 商家 / 1003 两者都有 | 影子账号挂到不存在的角色 ⇒ 登录成功、进去一片空白 |
 | `sys_base_menus` | 左侧菜单 | 登录成功、左侧什么都没有（**没有任何报错**） |
 | `sys_authority_menus` | 菜单给谁看 | 菜单建了但没人看得见 |
 | `sys_apis` | 接口登记（后台「API 管理」页展示用） | 只影响展示，不影响鉴权 |
@@ -51,6 +51,9 @@ DEFAULT_DB = os.path.join(HERE, "..", "..", "tf-platform-api", "data", "tf.db")
 AUTHORITIES = [
     (1001, "家长", "parentOverview"),
     (1002, "商家", "merchantItems"),
+    # 1003 = 同一个人两个身份都通过审核。`sys_user.authority_id` 只有一个值，
+    # 所以「两个身份」只能是一条合并角色：菜单和 casbin 都是 1001 ∪ 1002。
+    (1003, "家长+商家", "parentOverview"),
 ]
 
 # ============================ 菜单 ============================
@@ -60,6 +63,8 @@ AUTHORITIES = [
 # 「招商审核」（id=42）占了，重名会让路由互相覆盖。
 #
 # 元组：(path, name, title, component, icon, sort)
+#
+# ⚠️ 键是**身份**（parent / merchant），不是角色 id —— 1003 要拿两棵树。
 
 MENUS = {
     "parent": [
@@ -73,6 +78,15 @@ MENUS = {
         ("items", "merchantItems", "我的商品", "view/portal/merchant/items.vue", "goods", 1),
         ("status", "merchantStatus", "入驻状态", "view/portal/merchant/status.vue", "info-filled", 2),
     ],
+}
+
+# 角色 → 要挂哪些菜单树。1003 是并集。
+#
+# ⚠️ 漏一半的症状是「登录成功、左边少一组」—— 用户会以为自己那半边申请没过。
+AUTHORITY_MENU_ROLES = {
+    1001: ["parent"],
+    1002: ["merchant"],
+    1003: ["parent", "merchant"],
 }
 
 # ============================ 接口 ============================
@@ -123,6 +137,8 @@ SHELL_APIS = [
 ]
 
 AUTHORITY_APIS = {aid: pairs + SHELL_APIS for aid, pairs in ROLE_APIS.items()}
+# 1003 = 两边的接口都给（并集），否则「两个身份」的人进哪一屏都是 403
+AUTHORITY_APIS[1003] = ROLE_APIS[1001] + ROLE_APIS[1002] + SHELL_APIS
 
 
 def now() -> str:
@@ -168,15 +184,15 @@ def main():
 
     # ---------- ② 菜单（父 id 用**名字**记，插完才知道） ----------
     plan = []          # (role, aid, level, parent_name, path, name, title, comp, icon, sort)
-    for role, items in MENUS.items():
-        aid = 1001 if role == "parent" else 1002
-        parent_name = None
-        for idx, (path, name, title, comp, icon, sort) in enumerate(items):
-            plan.append((role, aid, 0 if idx == 0 else 1,
-                         None if idx == 0 else parent_name,
-                         path, name, title, comp, icon, sort))
-            if idx == 0:
-                parent_name = name
+    for aid, roles in AUTHORITY_MENU_ROLES.items():
+        for role in roles:
+            parent_name = None
+            for idx, (path, name, title, comp, icon, sort) in enumerate(MENUS[role]):
+                plan.append((role, aid, 0 if idx == 0 else 1,
+                             None if idx == 0 else parent_name,
+                             path, name, title, comp, icon, sort))
+                if idx == 0:
+                    parent_name = name
 
     for _role, aid, level, parent_name, path, name, title, comp, icon, sort in plan:
         row = conn.execute(
@@ -323,7 +339,8 @@ def main():
 
     print("\n写入 %d 条，完成。" % done)
     print("⚠️ 还要重载 casbin 才生效：重启后台，或管理员 token 调 POST /api/freshCasbin")
-    print("⚠️ 登录页「家长 / 商家」两个 tab 用的是 App 的手机号 + 密码；")
+    print("⚠️ 家长 / 商家用 App 的手机号 + 密码，登录页**只有一个输入框**：")
+    print("   账号像手机号就走门户那条路，角色由审核记录决定（1001 / 1002 / 1003）。")
     print("   没在 App 里申请过（或还没通过审核）的账号会在登录这一步被拒。")
     return 0
 

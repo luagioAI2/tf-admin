@@ -26,13 +26,13 @@
   - `router/system/sys_base.go` —— 公开路由 `POST /base/appLogin`
   - `model/mall/models.go` + `tf-platform-api/internal/app/entities/wish.go` —— `wish_item.merchant_uid`
 - 前端：
-  - `view/login/index.vue` —— 管理员 / 家长 / 商家三个 tab
+  - `view/login/index.vue` —— **一个输入框**（用户名 / App 手机号），没有身份切换
   - `pinia/modules/user.js` —— 抽出 `afterLogin()`，新增 `PortalLoginIn()`
   - `api/portal.js`（新）、`view/portal/parent/*`、`view/portal/merchant/*`（新）
   - `view/mall/wish/index.vue` —— 商品表加「归属」列
 - 脚本：
-  - `scripts/seed-portal.py`（新）—— 角色 1001/1002 + 菜单 + `sys_apis` + `casbin_rule`
-  - `scripts/check-portal-perms.py`（新）—— 43 条判据
+  - `scripts/seed-portal.py`（新）—— 角色 1001/1002/1003 + 菜单 + `sys_apis` + `casbin_rule`
+  - `scripts/check-portal-perms.py`（新）—— 65 条判据
 - 文档：本文件 + `demand-index.md`
 
 ## 涉及对象
@@ -47,12 +47,19 @@
   - `POST /mall/portal/merchant/items`
   - `POST /mall/portal/merchant/item/save`
 - 页面：`view/portal/parent/{overview,wishes,records}.vue`、`view/portal/merchant/{items,status}.vue`
-- 配置：`sys_authorities` 1001 / 1002；`sys_base_menus` id 57–63
+- 配置：`sys_authorities` 1001 / 1002 / 1003；`sys_base_menus` id 57–63
 
 ## 已确认约束
 
 - **一个后台、一套权限**：不新建 token 体系，家长 / 商家走 `sys_user` 的影子行
-  （`username = app_{uid}`，角色 1001 / 1002），菜单与 casbin 全部复用。
+  （`username = app_{uid}`，角色 1001 / 1002 / 1003），菜单与 casbin 全部复用。
+- **登录页没有身份切换**（2026-11-04 改）：只有一个「用户名 / App 手机号」输入框。
+  填的东西像手机号就走 App 那条路，否则走后台用户名。**角色由审核记录决定**，
+  不由用户声明 —— 让人自己选身份，选错的表现是「菜单少了一半」，
+  用户会以为自己的申请没过。请求体里传 `role` 也会被忽略（探针钉着）。
+- **两个身份都通过 ⇒ 1003（并集角色）**：`sys_user.authority_id` 只有一个值，
+  所以菜单和 casbin 都取 1001 ∪ 1002。撤掉其中一条审核，下次登录会掉回另一个角色
+  （影子账号复用同一行、只改 `authority_id`）。
 - **准入闸门 = `merchant_application` 已 approved**：没申请 / 待审 / 被驳回都在
   **登录这一步**被拒，不会进到一个空后台里。
 - **casbin 不管数据范围**：每个门户接口在 service 层再按 `uid` 过滤一次。
@@ -69,7 +76,7 @@
 - [x] 家长端 3 个只读接口；商家端 3 个接口（含 uid 作用域的写）
 - [x] 种子脚本（幂等，含 `--dry-run`），已执行
 - [x] 探针 `check-portal-perms.py`：**43/43 通过**（闸门 / 角色 / 身份 / 数据范围 / 外壳）
-- [x] 登录页三 tab + 家长 / 商家五个页面 + 商品归属列
+- [x] 登录页单输入框 + 家长 / 商家五个页面 + 商品归属列 + 归属指派
 - [x] `go build ./...` = 0；`vite build` = 0
 
 ## 后续待办
