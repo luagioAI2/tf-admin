@@ -50,4 +50,10 @@ var (
 	sysErrorApi          = api.ApiGroupApp.SystemApiGroup.SysErrorApi
 	skillsApi            = api.ApiGroupApp.SystemApiGroup.SkillsApi
 	aiWorkflowSessionApi = api.ApiGroupApp.SystemApiGroup.AIWorkflowSessionApi
+	// mallPortalApi 家长 / 商家门户的处理器。
+	//
+	// 放在这里只为一件事：`base/appLogin` 必须挂在**公开**路由组上
+	// （登录时还没有 token），而那个组由 BaseRouter 建。
+	// 处理器本身仍然属于 mall 模块，别把它的逻辑搬进 system。
+	mallPortalApi = api.ApiGroupApp.MallApiGroup.PortalApi
 )

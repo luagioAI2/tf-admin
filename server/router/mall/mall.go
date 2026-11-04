@@ -20,6 +20,8 @@ type RouterGroup struct {
 	TaskRouter
 	DashboardRouter
 	MerchantRouter
+	// PortalRouter 家长 / 商家门户（App 账号登录，按 uid 看自己的数据）
+	PortalRouter
 }
 
 var (
@@ -32,6 +34,7 @@ var (
 	taskApi         = api.ApiGroupApp.MallApiGroup.TaskApi
 	dashboardApi    = api.ApiGroupApp.MallApiGroup.DashboardApi
 	merchantApi     = api.ApiGroupApp.MallApiGroup.MerchantApi
+	portalApi       = api.ApiGroupApp.MallApiGroup.PortalApi
 )
 
 // ============================ 游戏与版本 ============================
@@ -176,5 +179,32 @@ func (r *MerchantRouter) InitMerchantRouter(router *gin.RouterGroup) {
 	{
 		groupWithoutRecord.POST("list", merchantApi.List)
 		groupWithoutRecord.GET("pending-count", merchantApi.PendingCount)
+	}
+}
+
+// ============================ 家长 / 商家门户 ============================
+
+type PortalRouter struct{}
+
+// InitPortalRouter 家长 / 商家门户路由
+//
+// 准入不在这里做，也不靠路径前缀 —— 靠两件数据：
+//   - casbin：1001 / 1002 的 policy 里有没有这个地址
+//   - `PortalApi.appUID`：token 的用户名必须是 `app_{uid}`，否则直接拒
+//
+// ⚠️ `item/save` 挂 `OperationRecord()`：商家改的是自己的售价 / 上下架，
+// 但**它出现在 C 端**，出了纠纷要能查到「谁在什么时候把价格改成了多少」。
+func (r *PortalRouter) InitPortalRouter(router *gin.RouterGroup) {
+	group := router.Group("mall/portal").Use(middleware.OperationRecord())
+	groupWithoutRecord := router.Group("mall/portal")
+	{
+		group.POST("merchant/item/save", portalApi.MerchantSaveItem)
+	}
+	{
+		groupWithoutRecord.GET("parent/overview", portalApi.ParentOverview)
+		groupWithoutRecord.POST("parent/wishes", portalApi.ParentWishes)
+		groupWithoutRecord.POST("parent/records", portalApi.ParentRecords)
+		groupWithoutRecord.GET("merchant/status", portalApi.MerchantStatus)
+		groupWithoutRecord.POST("merchant/items", portalApi.MerchantItems)
 	}
 }

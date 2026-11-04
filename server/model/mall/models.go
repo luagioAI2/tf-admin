@@ -253,6 +253,11 @@ type WishItem struct {
 	Emoji       string `gorm:"column:emoji" json:"emoji"`
 	Tint        string `gorm:"column:tint" json:"tint"`
 	PartnerName string `gorm:"column:partner_name" json:"partner_name"`
+	// MerchantUID 归属商家（`user.id`，0 = 平台自营）。
+	//
+	// 商家后台「我的商品」就是按这一列过滤的；**平台自营的东西（0）
+	// 任何商家都看不到、也改不了** —— 别把它当成「未填」去兜底成全可见。
+	MerchantUID uint   `gorm:"column:merchant_uid" json:"merchant_uid"`
 	GameID      string `gorm:"column:game_id" json:"game_id"`
 	// Pool 盲盒池（JSON 数组字符串）
 	Pool       string `gorm:"column:pool" json:"pool"`

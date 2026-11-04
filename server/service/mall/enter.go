@@ -29,6 +29,8 @@ type ServiceGroup struct {
 	TaskService
 	DashboardService
 	MerchantService
+	// PortalService 家长 / 商家门户（App 账号登录 + 按 uid 过滤）
+	PortalService
 }
 
 // txOrDB 取事务句柄（没传事务就用普通 DB）。

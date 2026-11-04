@@ -112,6 +112,7 @@ func Routers() *gin.Engine {
 		mallRouter.InitWishRouter(PrivateGroup)         // 心愿商城
 		mallRouter.InitTaskRouter(PrivateGroup)         // 任务
 		mallRouter.InitMerchantRouter(PrivateGroup)     // 招商审核
+		mallRouter.InitPortalRouter(PrivateGroup)       // 家长 / 商家门户
 	}
 
 	//插件路由安装

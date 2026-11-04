@@ -70,6 +70,15 @@
                 <span v-else class="dim">—</span>
               </template>
             </el-table-column>
+            <!-- 归属：`merchant_uid = 0` 是**平台自营**，不是「没填」。
+                 商家后台只能看到 / 改到自己名下的那些（见 PortalService.MerchantItems），
+                 所以这一列是运营判断「这条该不该我来动」的唯一依据。 -->
+            <el-table-column align="left" label="归属" width="120">
+              <template #default="scope">
+                <span v-if="!scope.row.merchant_uid" class="dim">平台自营</span>
+                <span v-else class="name">{{ userName(scope.row.merchant_uid) }}</span>
+              </template>
+            </el-table-column>
             <el-table-column align="left" label="外链" min-width="180">
               <template #default="scope">
                 <a

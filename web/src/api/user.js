@@ -11,6 +11,21 @@ export const login = (data) => {
   })
 }
 
+// @Summary 家长 / 商家用 App 账号登录
+// @Description 手机号 + App 的登录密码；`role` 只能是 parent / merchant。
+//              **不需要**在 App 里申请过 —— 但必须**已经通过审核**，
+//              否则服务端在登录这一步就拒（不会进到一个空后台里）。
+// @Produce  application/json
+// @Param data body {mobile:"string",password:"string",role:"parent|merchant"}
+// @Router /base/appLogin [post]
+export const appLogin = (data) => {
+  return service({
+    url: '/base/appLogin',
+    method: 'post',
+    data: data
+  })
+}
+
 // @Summary 获取验证码
 // @Produce  application/json
 // @Param data body {username:"string",password:"string"}

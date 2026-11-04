@@ -15,14 +15,26 @@
             <div class="flex items-center justify-center">
               <Logo :size="6" />
             </div>
-            <div class="mb-9">
+            <div class="mb-6">
               <p class="text-center text-4xl font-bold">
                 {{ $GIN_VUE_ADMIN.appName }}
               </p>
               <p class="text-center text-sm font-normal text-gray-500 mt-2.5">
-                A management platform using Golang and Vue
+                {{ subtitle }}
               </p>
             </div>
+
+            <!-- 三种身份，一个后台。
+                 家长 / 商家**不是另一套账号**：用的是 App 的手机号和密码，
+                 登录时换出对应的角色；准入看 `merchant_application` 有没有通过审核。 -->
+            <div class="flex justify-center mb-6">
+              <el-radio-group v-model="mode" size="large" @change="onModeChange">
+                <el-radio-button value="admin">管理员</el-radio-button>
+                <el-radio-button value="parent">家长</el-radio-button>
+                <el-radio-button value="merchant">商家</el-radio-button>
+              </el-radio-group>
+            </div>
+
             <el-form
               ref="loginForm"
               :model="loginFormData"
@@ -30,7 +42,7 @@
               :validate-on-rule-change="false"
               @keyup.enter="submitForm"
             >
-              <el-form-item prop="username" class="mb-6">
+              <el-form-item v-if="!isPortal" prop="username" class="mb-6">
                 <el-input
                   v-model="loginFormData.username"
                   size="large"
@@ -38,6 +50,15 @@
                   suffix-icon="user"
                 />
               </el-form-item>
+              <el-form-item v-else prop="mobile" class="mb-6">
+                <el-input
+                  v-model="loginFormData.mobile"
+                  size="large"
+                  placeholder="请输入手机号（App 登录用的那个）"
+                  suffix-icon="iphone"
+                />
+              </el-form-item>
+
               <el-form-item prop="password" class="mb-6">
                 <el-input
                   v-model="loginFormData.password"
@@ -47,8 +68,12 @@
                   placeholder="请输入密码"
                 />
               </el-form-item>
+
+              <!-- 验证码只挡「用户名 + 密码」这条最容易被撞的路。
+                   App 账号那条路已经有服务端的 bcrypt + 审核闸门，
+                   再加一层验证码只是让家长多输一次。 -->
               <el-form-item
-                v-if="loginFormData.openCaptcha"
+                v-if="!isPortal && loginFormData.openCaptcha"
                 prop="captcha"
                 class="mb-6"
               >
@@ -70,15 +95,25 @@
                   </div>
                 </div>
               </el-form-item>
-              <el-form-item class="mb-6">
+
+              <el-form-item class="mb-4">
                 <el-button
                   class="shadow shadow-active h-11 w-full"
                   type="primary"
                   size="large"
+                  :loading="submitting"
                   @click="submitForm"
                   >登 录</el-button
                 >
               </el-form-item>
+
+              <div v-if="isPortal" class="text-xs leading-5 text-gray-500 mb-4">
+                <p>· 用 App 注册的<b>手机号</b>和<b>密码</b>登录，不用另记账号。</p>
+                <p>
+                  · 需要先在 App 里提交「{{ mode === 'parent' ? '家长' : '商家' }}」申请并通过审核。
+                </p>
+              </div>
+
               <el-form-item v-if="isDev" class="mb-6">
                 <el-button
                   class="shadow shadow-active h-11 w-full"
@@ -127,7 +162,7 @@
   import { captcha } from '@/api/user'
   import { checkDB } from '@/api/initdb'
   import BottomInfo from '@/components/bottomInfo/bottomInfo.vue'
-  import { reactive, ref } from 'vue'
+  import { computed, reactive, ref } from 'vue'
   import { ElMessage } from 'element-plus'
   import { useRouter } from 'vue-router'
   import { useUserStore } from '@/pinia/modules/user'
@@ -140,6 +175,17 @@
 
   const router = useRouter()
   const captchaRequiredLength = ref(6)
+
+  // admin = 后台自己的账号；parent / merchant = App 账号 + 审核通过
+  const mode = ref('admin')
+  const isPortal = computed(() => mode.value !== 'admin')
+  const submitting = ref(false)
+  const subtitle = computed(() => {
+    if (mode.value === 'parent') return '家长中心 · 用 App 账号登录'
+    if (mode.value === 'merchant') return '商家中心 · 用 App 账号登录'
+    return 'A management platform using Golang and Vue'
+  })
+
   // 验证函数
   const checkUsername = (rule, value, callback) => {
     if (value.length < 5) {
@@ -154,6 +200,16 @@
     } else {
       callback()
     }
+  }
+  // 手机号：只做「像不像」的校验，真正的口径在服务端（`normalizeMobile`）。
+  // 这里放宽到「8 位以上数字、可带 +」—— 号码里带空格 / 横线的由服务端清，
+  // 前端提前拦会把「138-0013-8000」这种正常输入判错。
+  const checkMobile = (rule, value, callback) => {
+    const v = (value || '').replace(/[\s-]/g, '')
+    if (!/^\+?\d{8,20}$/.test(v)) {
+      return callback(new Error('请输入正确的手机号'))
+    }
+    callback()
   }
   const checkCaptcha = (rule, value, callback) => {
     if (!loginFormData.openCaptcha) {
@@ -192,22 +248,46 @@
   const picPath = ref('')
   const loginFormData = reactive({
     username: 'admin',
+    mobile: '',
     password: '',
     captcha: '',
     captchaId: '',
     openCaptcha: false
   })
-  const rules = reactive({
-    username: [{ validator: checkUsername, trigger: 'blur' }],
-    password: [{ validator: checkPassword, trigger: 'blur' }],
-    captcha: [{ validator: checkCaptcha, trigger: 'blur' }]
+
+  // 规则跟着身份走：切到家长 / 商家时不能再要求「用户名 5 位以上」
+  const rules = computed(() => {
+    if (isPortal.value) {
+      return {
+        mobile: [{ validator: checkMobile, trigger: 'blur' }],
+        password: [{ validator: checkPassword, trigger: 'blur' }]
+      }
+    }
+    return {
+      username: [{ validator: checkUsername, trigger: 'blur' }],
+      password: [{ validator: checkPassword, trigger: 'blur' }],
+      captcha: [{ validator: checkCaptcha, trigger: 'blur' }]
+    }
   })
+
+  // 切身份时把上一种身份的红字清掉（否则「用户名太短」会挂在手机号那一栏旁边）
+  const onModeChange = () => {
+    loginForm.value?.clearValidate()
+  }
 
   const userStore = useUserStore()
   const login = async () => {
+    if (isPortal.value) {
+      return await userStore.PortalLoginIn({
+        mobile: loginFormData.mobile,
+        password: loginFormData.password,
+        role: mode.value
+      })
+    }
     return await userStore.LoginIn(loginFormData)
   }
   const submitForm = () => {
+    if (submitting.value) return
     loginForm.value.validate(async (v) => {
       if (!v) {
         // 未通过前端静态验证
@@ -219,17 +299,22 @@
         return false
       }
 
-      // 通过验证，请求登陆
-      const flag = await login()
+      submitting.value = true
+      try {
+        // 通过验证，请求登陆
+        const flag = await login()
 
-      // 登陆失败，刷新验证码
-      if (!flag) {
-        await loginVerify()
-        return false
+        // 登陆失败，刷新验证码
+        if (!flag) {
+          if (!isPortal.value) await loginVerify()
+          return false
+        }
+
+        // 登陆成功
+        return true
+      } finally {
+        submitting.value = false
       }
-
-      // 登陆成功
-      return true
     })
   }
 

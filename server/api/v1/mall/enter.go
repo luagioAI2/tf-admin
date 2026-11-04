@@ -18,6 +18,8 @@ type ApiGroup struct {
 	TaskApi
 	DashboardApi
 	MerchantApi
+	// PortalApi 家长 / 商家门户
+	PortalApi
 }
 
 // 从 ServiceGroupApp 取 Service 实例（gin-vue-admin 的约定：
@@ -32,4 +34,8 @@ var (
 	taskService         = service.ServiceGroupApp.MallServiceGroup.TaskService
 	dashboardService    = service.ServiceGroupApp.MallServiceGroup.DashboardService
 	merchantService     = service.ServiceGroupApp.MallServiceGroup.MerchantService
+	portalService       = service.ServiceGroupApp.MallServiceGroup.PortalService
+	// loginLogService 门户登录也落 `sys_login_log`：
+	// 公网可达的登录入口如果不记失败，撞库只能从 nginx 日志里翻
+	loginLogService = service.ServiceGroupApp.SystemServiceGroup.LoginLogService
 )
