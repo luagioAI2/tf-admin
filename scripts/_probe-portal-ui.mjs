@@ -3,7 +3,7 @@
  *
  * 用法（三步，顺序不能反）：
  *
- *   # ① 造探针数据（顺手把接口判据也跑一遍，现在 65 条）
+ *   # ① 造探针数据（顺手把接口判据也跑一遍，现在 78 条）
  *   python scripts/check-portal-perms.py --keep
  *
  *   # ② 看界面（需要 web 的 dev server 在 8891）

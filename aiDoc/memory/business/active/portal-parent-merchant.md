@@ -32,7 +32,7 @@
   - `view/mall/wish/index.vue` —— 商品表加「归属」列
 - 脚本：
   - `scripts/seed-portal.py`（新）—— 角色 1001/1002/1003 + 菜单 + `sys_apis` + `casbin_rule`
-  - `scripts/check-portal-perms.py`（新）—— 65 条判据
+  - `scripts/check-portal-perms.py`（新）—— 78 条判据（含「审核接口 → 真的能登」）
 - 文档：本文件 + `demand-index.md`
 
 ## 涉及对象
