@@ -13,6 +13,9 @@ const routes = [
   {
     path: '/login',
     name: 'Login',
+    // 不写 meta.title 时标签页只剩站点名（`getPageTitle` 的兜底），
+    // 写成「运营后台 - 小任务农场」更像一个产品。
+    meta: { title: '运营后台' },
     component: () => import('@/view/login/index.vue')
   },
   {

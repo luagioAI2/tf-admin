@@ -1,0 +1,38 @@
+/* 主色：App 的农场绿（grass-700）。
+ *
+ * 这里有两道，**顺序别搞反**：
+ *
+ * ① 真正的来源是 `pinia/modules/app.js` 里的 `config.primaryColor`。
+ *    `watchEffect` 会调 `setBodyPrimaryColor()`，把 `--el-color-primary`
+ *    和 light-1..10 / dark-1..2 全家算出来，写在 `document.documentElement`
+ *    的 **inline style** 上 —— 内联样式的优先级高于任何样式表。
+ *    所以只改 CSS 文件是没用的：实测按钮还是蓝的，而 build / 探针全绿。
+ *
+ * ② 本文件只负责**脚本执行前**那一小段时间（首屏 loading、登录页首帧）。
+ *    不写这一段的话，JS 一上来之前按钮是 Element Plus 默认的 #409eff，
+ *    会看到一下蓝再变绿。两处的值必须一致。
+ *
+ * 想换主色：改 `app.js` 的 `primaryColor` 和这里，两个都改。
+ */
+
+:root {
+  --el-color-primary: #15803d;
+  --el-color-primary-light-3: #5ba677;
+  --el-color-primary-light-5: #8ac09e;
+  --el-color-primary-light-7: #b9d9c5;
+  --el-color-primary-light-8: #d0e6d8;
+  --el-color-primary-light-9: #e8f2ec;
+  --el-color-primary-dark-2: #116631;
+}
+
+/* 暗色主题下 Element Plus 会**重新定义**一遍主色（往深色底上混），
+   所以这里也要再来一遍，否则切到暗色又变蓝。 */
+html.dark {
+  --el-color-primary: #15803d;
+  --el-color-primary-light-3: #156031;
+  --el-color-primary-light-5: #154a29;
+  --el-color-primary-light-7: #143420;
+  --el-color-primary-light-8: #142a1c;
+  --el-color-primary-light-9: #141f18;
+  --el-color-primary-dark-2: #449964;
+}

@@ -1,9 +1,16 @@
+// ⚠️ 这个文件目前**没有被任何地方 import**（`main.js` 引的是
+//    `element-plus/dist/index.css` 这个编译好的产物）。
+//    也就是说：在这里改颜色**不会生效**，而且 build 和探针都看不出来。
+//    真正生效的是 `src/style/theme.scss` 里的 CSS 变量覆盖。
+//    这里的值保持和它一致，将来若改成从源码编译主题，直接就能用。
 @forward 'element-plus/theme-chalk/src/common/var.scss' with (
   $colors: (
     'white': #ffffff,
     'black': #000000,
     'primary': (
-      'base': #4d70ff
+      // 跟 App 的 grass-700 同一个值：白字压在 #22c55e 上对比度不够，
+      // 压 #15803d 才够读（也正好是 App 里深色那一档绿）。
+      'base': #15803d
     ),
     'success': (
       'base': #67c23a

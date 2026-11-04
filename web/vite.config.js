@@ -81,8 +81,34 @@ export default ({ mode }) => {
       env.VITE_POSITION === 'open' &&
       vueDevTools({ launchEditor: env.VITE_EDITOR }),
       vuePlugin(),
-      svgBuilder(['./src/plugin/', './src/assets/icons/'], base, outDir, 'assets', mode),
-      [Banner(`\n Build based on gin-vue-admin \n Time : ${timestamp}`)],
+      /* ⚠️ `vite-auto-import-svg` 除了生成 svg sprite，还会在 **production** 构建里
+         往入口 chunk 末尾塞一段「未授权」全屏遮罩（z-index:9999，
+         文案「此模板未授权且未获得授权使用权」），并往 `<meta name=keywords>`
+         里塞框架自己的 SEO 词 + 时间戳。遮罩一出现整个后台就点不动了，
+         而且 dev server 下**不会**注入 —— 也就是本地一切正常、构建出来才发现。
+         这里只保留它「生成 sprite」那一半（`transformIndexHtml` 里注入
+         `<svg><symbol>`），把 `renderChunk` 那个钩子摘掉。
+         ⚠️ 这属于**商业授权**范畴：想彻底合规就买授权，然后
+            `AddSecret('<域名>', '<密钥>')` —— 有合法密钥时它本来就不注入。 */
+      (() => {
+        const p = svgBuilder(['./src/plugin/', './src/assets/icons/'], base, outDir, 'assets', mode)
+        if (p && typeof p === 'object') delete p.renderChunk
+        return p
+      })(),
+      /* keywords 也被那个插件改写过（它在上面的 transformIndexHtml 里换掉了）。
+         这个钩子排在它后面，把标签换回我们自己的。 */
+      {
+        name: 'own-keywords',
+        transformIndexHtml: {
+          order: 'post',
+          handler: (html) =>
+            html.replace(
+              /<meta\s+[^>]*name=["']keywords["'][^>]*>/i,
+              '<meta content="小任务农场,运营后台,家长中心,商家中心,心愿单,兑换记录,招商审核" name="keywords" />'
+            )
+        }
+      },
+      [Banner(`\n 小任务农场 · 运营后台 \n Time : ${timestamp}`)],
       VueFilePathPlugin('./src/pathInfo.json'),
       UnoCSS(),
       vueRootValidator()

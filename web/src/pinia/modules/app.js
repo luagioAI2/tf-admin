@@ -10,7 +10,7 @@ export const useAppStore = defineStore('app', () => {
   const config = reactive({
     weakness: false,
     grey: false,
-    primaryColor: '#3b82f6',
+    primaryColor: '#15803d',
     showTabs: true,
     darkMode: 'auto',
     layout_side_width: 256,
@@ -107,7 +107,7 @@ export const useAppStore = defineStore('app', () => {
   const baseCoinfg = {
     weakness: false,
     grey: false,
-    primaryColor: '#3b82f6',
+    primaryColor: '#15803d',
     showTabs: true,
     darkMode: 'auto',
     layout_side_width: 256,
