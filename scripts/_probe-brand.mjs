@@ -257,6 +257,79 @@ try {
   check(!FRAMEWORK_WORDS.some((w) => home.includes(w)), '首页正文没有框架字样')
   await shot('brand-02-dashboard')
 
+  // ---------- 4·5 首页快捷入口：画出来 ≠ 点得动 ----------
+  /* 曾经的坏法：卡片用 `hasRoute(name)` 过滤（所以能显示），`go()` 却按写死的
+     `/mall/xxx` 跳 —— 动态路由真实路径是 `/layout/mall/xxx`，于是全落到
+     catchAll 的框架 404 页。只断言「有常用入口」抓不到这个，必须真的点一下。 */
+  console.log('\n== 4·5 快捷入口跳转 ==')
+  const jumpTargets = await a.page.evaluate(() => {
+    const app = document.querySelector('#app')?.__vue_app__
+    const router = app?.config?.globalProperties?.$router
+    const names = ['merchant', 'mallWish', 'mallRedeem', 'appUser', 'mallDashboard']
+    return names.map((n) => {
+      const r = router?.resolve({ name: n })
+      const m = r?.matched ?? []
+      return {
+        name: n,
+        href: r?.href ?? '',
+        depth: m.length,
+        is404: m.some((x) => String(x.path).includes('catchAll'))
+      }
+    })
+  })
+  check(
+    jumpTargets.every((t) => t.depth >= 3 && !t.is404),
+    '五个快捷入口按 name 都解析到真实页面（不是 404）',
+    JSON.stringify(jumpTargets)
+  )
+
+  const jumpLabel = (await a.page.evaluate(() =>
+    document.body.innerText.includes('去审核'))) ? '去审核' : '招商审核'
+  await a.clickByText(jumpLabel)
+  await sleep(900)
+  const jumped = await a.page.evaluate(() => ({
+    hash: location.hash,
+    text: document.body.innerText.replace(/\s+/g, ' ')
+  }))
+  check(
+    jumped.hash.includes('/layout/mall/merchant'),
+    `点「${jumpLabel}」真的进了招商审核页`,
+    JSON.stringify(jumped.hash)
+  )
+  check(
+    !jumped.text.includes('页面被神秘力量吸走了') && !jumped.text.includes('flipped-aurora'),
+    '没有落到框架 404 页',
+    jumped.text.slice(0, 120)
+  )
+  // ---------- 4·6 404 页也别露框架痕迹 ----------
+  /* 上次「去审核」跳错路径，落到的是框架自带的 404 页 —— 那一屏直接写着
+     github.com/flipped-aurora/gin-vue-admin。跳转修好了，但坏路径总还会有，
+     所以这一屏自己也要产品化，并且钉住。 */
+  console.log('\n== 4·6 404 页 ==')
+  await a.page.evaluate(() => {
+    const app = document.querySelector('#app')?.__vue_app__
+    app?.config?.globalProperties?.$router?.push('/__probe_no_such_page__')
+  })
+  await a.waitFor(
+    () => document.body.innerText.includes('这个页面找不到了'),
+    '404 页打开',
+    { timeout: 15000 }
+  )
+  const nf = await a.page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '))
+  check(
+    !/flipped-aurora|神秘力量|gin-vue-admin/i.test(nf),
+    '404 页没有框架字样 / 项目地址',
+    nf.slice(0, 120)
+  )
+  check(nf.includes('返回首页'), '404 页有「返回首页」')
+
+  // 回首页：后面的「用户管理」段还要用侧边栏
+  await a.page.evaluate(() => {
+    const app = document.querySelector('#app')?.__vue_app__
+    app?.config?.globalProperties?.$router?.push({ name: 'dashboard' })
+  })
+  await a.waitFor(() => document.body.innerText.includes('常用入口'), '回到首页', { timeout: 20000 })
+
   // ---------- ⑤ 页脚 ----------
   console.log('\n== 5. 页脚 ==')
   const foot = await a.page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '))

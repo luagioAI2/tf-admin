@@ -75,7 +75,7 @@
           :key="s.name"
           type="button"
           class="flex items-center gap-3 rounded-xl border border-[#e6efe6] bg-[#fbfdf9] px-4 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[#15803d] hover:shadow-md"
-          @click="go(s.path)"
+          @click="go(s.name)"
         >
           <span class="min-w-0">
             <span class="block truncate text-sm font-medium text-[#14532d]">
@@ -168,7 +168,7 @@
           : pendingMerchant.value > 0
             ? '有商家在等，去审核'
             : '没有积压',
-      to: '/mall/merchant'
+      to: 'merchant'
     },
     {
       key: 'wish',
@@ -177,7 +177,7 @@
       value: num(raw.value.wish_pending_action),
       warn: state.value === 'ok' && (raw.value.wish_pending_action ?? 0) > 0,
       hint: `已许愿 ${num(raw.value.wish_pending_wished)} 个 · 待兑现`,
-      to: '/mall/wish'
+      to: 'mallWish'
     },
     {
       key: 'user',
@@ -200,20 +200,25 @@
   ])
 
   /* 只列**真的存在**的路由：菜单是按角色动态挂的，
-     写死一个没挂上的路径，点下去是空白页，而人的第一反应是「权限配错了」。 */
+     写死一个没挂上的路径，点下去是空白页，而人的第一反应是「权限配错了」。
+     ★ 而且**只能按 name 跳**：动态路由整体挂在 `/layout` 底下，真实路径是
+       `/layout/mall/merchant`；写 `/mall/merchant` 会落到 catchAll 的 404 页
+       （那一屏还带着框架的项目地址）。`hasRoute` 按 name 查得通过，path 却
+       对不上 —— 所以「卡片显示出来了」根本不等于「点得动」。 */
   const ALL_SHORTCUTS = [
-    { name: 'merchant', path: '/mall/merchant', icon: '📮', title: '招商审核', desc: '通过 / 拒绝入驻' },
-    { name: 'mallWish', path: '/mall/wish', icon: '🎁', title: '心愿商城', desc: '孩子许的愿' },
-    { name: 'mallRedeem', path: '/mall/redeem', icon: '🛍️', title: '兑换商城', desc: '商品与定价' },
-    { name: 'appUser', path: '/mall/user', icon: '👨‍👩‍👧', title: 'App 用户', desc: '家长与孩子的账号' },
-    { name: 'mallDashboard', path: '/mall/dashboard', icon: '📊', title: '经营看板', desc: '更细的盘子' }
+    { name: 'merchant', icon: '📮', title: '招商审核', desc: '通过 / 拒绝入驻' },
+    { name: 'mallWish', icon: '🎁', title: '心愿商城', desc: '孩子许的愿' },
+    { name: 'mallRedeem', icon: '🛍️', title: '兑换商城', desc: '商品与定价' },
+    { name: 'appUser', icon: '👨‍👩‍👧', title: 'App 用户', desc: '家长与孩子的账号' },
+    { name: 'mallDashboard', icon: '📊', title: '经营看板', desc: '更细的盘子' }
   ]
   const shortcuts = computed(() =>
     ALL_SHORTCUTS.filter((s) => router.hasRoute(s.name))
   )
 
-  const go = (path) => {
-    router.push(path)
+  const go = (name) => {
+    if (!router.hasRoute(name)) return
+    router.push({ name })
   }
 
   onMounted(async () => {
