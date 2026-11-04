@@ -42,7 +42,7 @@ import os
 #    写死 8090 时症状是「游客登录拿到 token」那条红、后面全断，
 #    而看日志像「平台没起来」—— 其实起来了，只是端口不一样。
 ADMIN = os.environ.get('TF_ADMIN_API', 'http://127.0.0.1:8890')
-API = os.environ.get('TF_PLATFORM_API', 'http://127.0.0.1:8090')
+API = os.environ.get('TF_PLATFORM_API', 'http://127.0.0.1:8080')
 ADMIN_USER = {'username': 'admin', 'password': 'TfAdmin@2026'}
 ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'  # Crockford Base32（无 I L O U）
 

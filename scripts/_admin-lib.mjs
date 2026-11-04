@@ -269,6 +269,18 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
     await new Promise((r) => setTimeout(r, 600))
   }
 
+  /* #16：心愿商城 / 游戏 升成和「商城运营」平级的一级菜单后，探针要先点开
+     这两个组才看得到子页。★ 文案必须是分组标题本身：'游戏' 写成 '游戏列表'
+     会点到子项而不是分组，子菜单根本没展开，下一步「找不到按钮」。 */
+  const openWishGroup = async () => {
+    await clickByText('心愿商城')
+    await new Promise((r) => setTimeout(r, 600))
+  }
+  const openGameGroup = async () => {
+    await clickByText('游戏')
+    await new Promise((r) => setTimeout(r, 600))
+  }
+
   /**
    * 点开某个 label 的表单项里的下拉框（只找**可见**的表单项）。
    *
@@ -399,6 +411,8 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
     pickOption,
     login,
     openMallGroup,
+    openWishGroup,
+    openGameGroup,
     shot,
     waitFor,
     close: () => browser.close()

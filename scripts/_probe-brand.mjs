@@ -210,6 +210,9 @@ try {
     check(!(shell.aside ?? '').includes(g), `侧边栏没有「${g}」`)
   }
   check((shell.aside ?? '').includes('商城运营'), '侧边栏还有「商城运营」（没把业务菜单一起藏掉）')
+  check((shell.aside ?? '').includes('心愿商城'), '侧边栏有平级的「心愿商城」一级菜单')
+  check((shell.aside ?? '').includes('游戏'), '侧边栏有平级的「游戏」一级菜单')
+  check((shell.aside ?? '').includes('模板配置'), '侧边栏有平级的「模板配置」一级菜单')
   check(!(shell.aside ?? '').includes('编程辅助'), '侧边栏没有框架的「编程辅助」开发组')
   check(
     shell.activeBg === 'rgb(231, 244, 236)',
@@ -265,7 +268,8 @@ try {
   const jumpTargets = await a.page.evaluate(() => {
     const app = document.querySelector('#app')?.__vue_app__
     const router = app?.config?.globalProperties?.$router
-    const names = ['merchant', 'mallWish', 'mallRedeem', 'appUser', 'mallDashboard']
+    const names = ['merchant', 'mallWish', 'mallRedeem', 'appUser', 'mallDashboard',
+                   'wishOrder', 'gameList', 'gameCode', 'templateTask', 'templateRedeem']
     return names.map((n) => {
       const r = router?.resolve({ name: n })
       const m = r?.matched ?? []
@@ -279,7 +283,7 @@ try {
   })
   check(
     jumpTargets.every((t) => t.depth >= 3 && !t.is404),
-    '五个快捷入口按 name 都解析到真实页面（不是 404）',
+    '快捷入口 + #16 新拆的 5 个页面按 name 都解析到真实页面（不是 404）',
     JSON.stringify(jumpTargets)
   )
 

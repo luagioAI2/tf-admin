@@ -76,7 +76,12 @@ MENUS = {
     "merchant": [
         ("merchantPortal", "merchantPortal", "商家中心", "view/routerHolder.vue", "shop", 21),
         ("items", "merchantItems", "我的商品", "view/portal/merchant/items.vue", "goods", 1),
-        ("status", "merchantStatus", "入驻状态", "view/portal/merchant/status.vue", "info-filled", 2),
+        # 商家配「我推广的用户看到什么任务 / 兑换品」。
+        # ★ 和超管的「模板配置 → 任务模板 / 兑换模板」是**同一个 .vue**
+        #   （view/mall/template/index.vue），由路由 name 决定默认页签；
+        #   商家这一页两个页签都能切，但数据范围被后端收成 owner_uid=自己。
+        ("templates", "merchantTemplates", "我的模板", "view/mall/template/index.vue", "files", 2),
+        ("status", "merchantStatus", "入驻状态", "view/portal/merchant/status.vue", "info-filled", 3),
     ],
 }
 
@@ -214,13 +219,23 @@ def main():
                 if idx == 0:
                     parent_name = name
 
+    # ★ 菜单按 name **去重**：1003 是「家长 + 商家」两棵树，同一个 merchant 菜单
+    #   会在 plan 里出现两次。已有的菜单看不出问题（两次都走「已存在，跳过」），
+    #   但**新加一条**时两次规划都查不到行 ⇒ 插两条同 name 的菜单，
+    #   一条授权给 1002、一条给 1003，左侧就出现两个「我的模板」。
+    #   实测踩过（merchantTemplates 第一次入库时）。授权那一步仍然每个 aid 各来一次。
+    seen_menus = set()
+
     for _role, aid, level, parent_name, path, name, title, comp, icon, sort in plan:
         row = conn.execute(
             "SELECT id FROM sys_base_menus WHERE name = ? AND deleted_at IS NULL", (name,)
         ).fetchone()
         if row:
             print("· 菜单已存在：%s（id=%d，跳过）" % (name, row["id"]))
+        elif name in seen_menus:
+            pass  # 同一次运行里已经规划过插入，别再插第二条
         else:
+            seen_menus.add(name)
             actions.append({
                 "kind": "menu", "name": name, "parent_name": parent_name,
                 "sql": "INSERT INTO sys_base_menus (created_at, updated_at, deleted_at, menu_level,"

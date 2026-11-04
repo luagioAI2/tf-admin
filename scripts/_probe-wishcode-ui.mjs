@@ -103,16 +103,30 @@ try {
   ok('没有要求验证码', !captchaRequired)
 
   /* ============ ② 进页面、找页签 ============ */
-  console.log('\n② 心愿商城 → 激活码页签')
-  await a.openMallGroup()
-  await a.clickByText('心愿商城')
-  await page.waitForFunction(() => location.hash.includes('wish'), { timeout: 20000 })
-  await page.waitForFunction(() => document.body.innerText.includes('心愿商品'), { timeout: 20000 })
+  console.log('\n② 游戏 → 游戏激活码')
+  await a.openGameGroup()
+  await a.clickByText('游戏激活码')
+  await page.waitForFunction(() => location.hash.includes('game'), { timeout: 20000 })
+  await page.waitForFunction(() => document.body.innerText.includes('明文只在'), { timeout: 20000 })
 
-  const tabs = await page.evaluate(() =>
-    [...document.querySelectorAll('.el-tabs__item')].map((el) => (el.innerText || '').trim())
-  )
+  /* ★ GVA 顶栏的多标签栏也用 .el-tabs__item，「首页 / 游戏激活码」会混进来。
+     只认页面那一组三个页签，否则 querySelector 命中的 active 是顶栏标签，
+     断言恒红（实测过一次：tabs = 首页/游戏激活码/心愿商品/心愿单/激活码）。 */
+  const PAGE_TABS = ['心愿商品', '心愿单', '激活码']
+  const tabs = await page.evaluate((names) =>
+    [...document.querySelectorAll('.el-tabs__item')]
+      .map((el) => (el.innerText || '').trim())
+      .filter((t) => names.includes(t)), PAGE_TABS)
   ok('★ 有第三个页签「激活码」', tabs.includes('激活码'), tabs.join(' / '))
+  ok(
+    '★ 从「游戏激活码」菜单进来默认就停在激活码页签（MODE_BY_NAME 生效）',
+    await page.evaluate((names) => {
+      const active = [...document.querySelectorAll('.el-tabs__item.is-active')]
+        .map((el) => (el.innerText || '').trim())
+        .filter((t) => names.includes(t))
+      return active.length === 1 && active[0] === '激活码'
+    }, PAGE_TABS)
+  )
 
   await a.clickByText('激活码')
   await new Promise((r) => setTimeout(r, 1200))

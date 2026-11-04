@@ -62,12 +62,18 @@ func (i *initMenu) InitializeData(ctx context.Context) (next context.Context, er
 		{MenuLevel: 0, Hidden: true, ParentId: 0, Path: "https://www.gin-vue-admin.com", Name: "https://www.gin-vue-admin.com", Component: "/", Sort: 0, Meta: Meta{Title: "官方网站", Icon: "customer-gva"}},
 		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "state", Name: "state", Component: "view/system/state.vue", Sort: 8, Meta: Meta{Title: "运行状态", Icon: "cloudy"}},
 		{MenuLevel: 0, Hidden: true, ParentId: 0, Path: "plugin", Name: "plugin", Component: "view/routerHolder.vue", Sort: 6, Meta: Meta{Title: "插件系统", Icon: "cherry"}},
-		// 商城运营（mall 模块的页面都挂在这下面）。
-		//
-		// ⚠️ 后端 `server/router/mall` 有 7 个路由组，但**页面目前只有招商审核
-		// 这一页**。别照着路由组把菜单补齐 —— 点进去是空白页（组件不存在时
-		// gin-vue-admin 只报一个 404 chunk，看着像「权限不足」）。
+		// 商城运营 / 心愿商城 / 游戏 是三个平级的一级菜单，各自挂子页面。
+		// ★ component 必须是 web/src/view 下真实存在的 .vue：不存在时 gin-vue-admin
+		//   只报一个 404 chunk，看着像「权限不足」，其实点进去是空白页。
+		// ★ 心愿商品 / 心愿单 / 游戏激活码 指向同一个 view/mall/wish/index.vue，
+		//   由路由 name 决定默认页签（见该文件的 MODE_BY_NAME）。
 		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "mall", Name: "mall", Component: "view/routerHolder.vue", Sort: 2, Meta: Meta{Title: "商城运营", Icon: "shop"}},
+		// 模板配置：新用户首次启动铺的任务 / 兑换内容。
+		// ★ 商家也有这一页（`商家中心 → 我的模板`），但走的是 seed-portal.py 那棵树，
+		//   不在这里 —— initdb 只建超管这套菜单。
+		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "templateRoot", Name: "templateRoot", Component: "view/routerHolder.vue", Sort: 3, Meta: Meta{Title: "模板配置", Icon: "files"}},
+		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "wishMall", Name: "wishMall", Component: "view/routerHolder.vue", Sort: 4, Meta: Meta{Title: "心愿商城", Icon: "present"}},
+		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "gameRoot", Name: "gameRoot", Component: "view/routerHolder.vue", Sort: 5, Meta: Meta{Title: "游戏", Icon: "platform"}},
 	}
 
 	// 先创建父级菜单（ParentId = 0 的菜单）
@@ -122,8 +128,25 @@ func (i *initMenu) InitializeData(ctx context.Context) (next context.Context, er
 		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["plugin"], Path: "anInfo", Name: "anInfo", Component: "plugin/announcement/view/info.vue", Sort: 5, Meta: Meta{Title: "公告管理[示例]", Icon: "scaleToOriginal"}},
 
 		// mall子菜单
+		// mall子菜单（和 scripts/seed-menu.py / seed-menu-level2.py 对齐）
 		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["mall"], Path: "user", Name: "appUser", Component: "view/mall/user/index.vue", Sort: 0, Meta: Meta{Title: "App 用户", Icon: "user"}},
-		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["mall"], Path: "merchant", Name: "merchant", Component: "view/mall/merchant/index.vue", Sort: 1, Meta: Meta{Title: "招商审核", Icon: "message"}},
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["mall"], Path: "dashboard", Name: "mallDashboard", Component: "view/mall/dashboard/index.vue", Sort: 1, Meta: Meta{Title: "经营看板", Icon: "data-analysis"}},
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["mall"], Path: "redeem", Name: "mallRedeem", Component: "view/mall/redeem/index.vue", Sort: 2, Meta: Meta{Title: "兑换商城", Icon: "shopping-cart"}},
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["mall"], Path: "merchant", Name: "merchant", Component: "view/mall/merchant/index.vue", Sort: 3, Meta: Meta{Title: "招商审核", Icon: "message"}},
+
+		// 心愿商城（一级菜单 wishMall 的子页；三个菜单共用 wish/index.vue）
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["wishMall"], Path: "item", Name: "mallWish", Component: "view/mall/wish/index.vue", Sort: 0, Meta: Meta{Title: "心愿商品", Icon: "goods"}},
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["wishMall"], Path: "order", Name: "wishOrder", Component: "view/mall/wish/index.vue", Sort: 1, Meta: Meta{Title: "心愿单", Icon: "tickets"}},
+
+		// 模板配置（一级菜单 templateRoot 的子页；两个菜单共用 template/index.vue）
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["templateRoot"], Path: "task", Name: "templateTask", Component: "view/mall/template/index.vue", Sort: 0, Meta: Meta{Title: "任务模板", Icon: "document"}},
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["templateRoot"], Path: "redeem", Name: "templateRedeem", Component: "view/mall/template/index.vue", Sort: 1, Meta: Meta{Title: "兑换模板", Icon: "shopping-cart"}},
+
+		// 游戏（一级菜单 gameRoot 的子页）
+		// ★ 只授权给 888：家长 1001 / 商家 1002 / 家长+商家 1003 都看不到这组，
+		//   /mall/game/* 与 /mall/wish/* 的 casbin 也只有 888，别顺手给门户开。
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["gameRoot"], Path: "list", Name: "gameList", Component: "view/mall/game/index.vue", Sort: 0, Meta: Meta{Title: "游戏列表", Icon: "grid"}},
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["gameRoot"], Path: "code", Name: "gameCode", Component: "view/mall/wish/index.vue", Sort: 1, Meta: Meta{Title: "游戏激活码", Icon: "key"}},
 	}
 
 	// 创建子菜单

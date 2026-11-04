@@ -415,6 +415,51 @@ python scripts/check-mall-perms.py     # 逐个体检：哪个接口还是「权
 > 非盲盒保存时一律写回 1 —— 否则「盲盒改成游戏盒子」之后这个字段还留着 5。
 > 口径见 `kid-quest-farm-online/docs/wish-mall-spec.md` §13。
 
+### 4.4.1 模板配置（2026-11-05）
+
+新用户**首次打开 App 时铺一次**的任务和兑换品，从「硬编码在客户端」改成
+「后台配」。菜单是跟「商城运营」平级的一级菜单，下面两页：
+
+```
+模板配置
+  ├ 任务模板   view/mall/template/index.vue（路由名 templateTask）
+  └ 兑换模板   view/mall/template/index.vue（路由名 templateRedeem）
+商家中心
+  └ 我的模板   view/mall/template/index.vue（路由名 merchantTemplates）
+```
+
+| 接口 | 说明 |
+|---|---|
+| `POST /mall/template/list` | 模板列表（带条目数，一次 GROUP BY 查完） |
+| `POST /mall/template/detail` | 头 + 全部条目 |
+| `POST /mall/template/create` / `update` / `delete` | 模板头 CRUD |
+| `POST /mall/template/set-default` | 设为该分组的默认 |
+| `POST /mall/template/item/save` / `item/delete` | 条目（**整条覆盖**） |
+| `POST /mall/template/invite-code` | 我的推广码 |
+
+★★ **模板是蓝图，不是用户的任务表**：`task` / `redeem_item` 是每用户一份
+（有 `uid`），`template` / `template_item` 没有 uid。所以**改模板对已经装过的
+老用户不生效** —— 页顶那句提示是给运营看的，删了他们会以为「改了怎么没变」。
+
+★★ **数据范围由 token 推导，前端传的 `owner_uid` 一律不信任**：
+超管 888 能管全部；商家 1002 / 1003 只能管 `scope=merchant AND owner_uid=自己`
+（`normalizeScope` 强制收敛）；家长 1001 连 casbin 都不给。
+界面上的表现：商家那一页**看不到官方模板**，也没有超管那个「模板配置」菜单。
+
+★★ **`item/save` 是整条覆盖**。页面只把表单里那几个玩法参数写回 `extra`，
+其余键（`rewardItemIds` / `createdByParent` …）必须原样带回去 ——
+否则保存报成功、参数静默消失，孩子的签到规则就没了。
+`_probe-template.mjs` 第 ⑤ 段专门钉这一条。
+
+★ 官方默认模板是该 kind 唯一一份时**禁止删除**（删了新用户没有默认内容，
+平台 `Resolve` 会失败）。要换内容就编辑它，或者另建一份设为默认。
+
+★ 邀请码由商家 uid **确定性推导**（`TF<uid 的 36 进制>-<4 位校验>`），不落表；
+后台和 `tf-platform-api` 两份实现必须逐字节一致（`template_test.go` 钉了已知值）。
+
+验收：`python scripts/check-menu-level2.py`（84 条）+ `node scripts/_probe-template.mjs`（27 条）
++ `node scripts/_probe-portal-ui.mjs`（25 条，含商家侧 4.5 段）。
+
 ### 4.5 招商审核（2026-10-29 新增，**第一个有页面的模块**）
 
 C 端（`kid-quest-farm-2d` 心愿页右上角「🤝 招商」）只负责**提交**，
@@ -516,11 +561,23 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 | 商城运营 → App 用户 | `web/src/view/mall/user/index.vue` | `web/src/api/tfUser.js` | `scripts/_probe-user.mjs`（29）+ `scripts/_probe-reset-password.mjs`（18） |
 | 商城运营 → 招商审核 | `web/src/view/mall/merchant/index.vue` | `web/src/api/mallMerchant.js` | — |
 | 商城运营 → 兑换商城 | `web/src/view/mall/redeem/index.vue` | `web/src/api/mallRedeem.js` | `scripts/_probe-redeem.mjs`（18） |
-| 商城运营 → 心愿商城 | `web/src/view/mall/wish/index.vue` | `web/src/api/mallWish.js` | `scripts/_probe-wish.mjs`（20） |
+| 模板配置 → 任务模板 / 兑换模板 | `web/src/view/mall/template/index.vue` | `web/src/api/mallTemplate.js` | `scripts/_probe-template.mjs`（27） |
+| 心愿商城 → 心愿商品 / 心愿单 | `web/src/view/mall/wish/index.vue` | `web/src/api/mallWish.js` | `scripts/_probe-wish.mjs`（20） |
+| 游戏 → 游戏列表 | `web/src/view/mall/game/index.vue` | `web/src/api/mallGame.js` | `scripts/_probe-game-list.mjs` |
+| 游戏 → 游戏激活码 | `web/src/view/mall/wish/index.vue`（`code` 页签） | `web/src/api/mallWishCode.js` | `scripts/_probe-wishcode-ui.mjs` |
+| 商家中心 → 我的模板 | `web/src/view/mall/template/index.vue`（`merchantTemplates`） | `web/src/api/mallTemplate.js` | `scripts/_probe-portal-ui.mjs` §4.5 |
+
+> ★ **一个 .vue 挂多个菜单**：`wish/index.vue` 挂 3 个（心愿商品 / 心愿单 /
+> 游戏激活码）、`template/index.vue` 挂 3 个（任务模板 / 兑换模板 / 我的模板）。
+> 默认页签由**路由 name** 决定（两个文件里的 `MODE_BY_NAME`），并且用
+> `watch(() => route.name)` 而不是 ref 初值 —— Vue Router 复用同一组件实例时
+> **不重跑 setup**，只给初值会「从心愿商品点进心愿单，还停在心愿商品」。
 
 这些菜单写进了 `source/system/menu.go` 的**种子**，所以**首次 `initdb`
-之后就有了**，不用手动加。已经初始化过的库要自己加一次（用
-`python scripts/seed-menu.py --only <menuName>`）。
+之后就有了**，不用手动加。已经初始化过的库要跑脚本：
+`python scripts/seed-menu.py` / `seed-menu-level2.py` / `seed-portal.py`
+（三个都幂等，顺序无所谓；`seed-menu-level2.py` 还会把商家中心那列的
+顺序对齐 —— `seed-portal.py` 只插不改）。
 
 ### 6.2 还没有页面的模块
 
@@ -528,13 +585,14 @@ python scripts/check-mall-perms.py       ✓ 14/14（2026-11-03 补齐前只有 
 
 | 菜单名 | path | component |
 |---|---|---|
-| 游戏管理 | `mallGame` | `view/mall/game/index.vue` |
 | 游戏版本 | `mallRelease` | `view/mall/release/index.vue` |
 | 任务记录 | `mallTask` | `view/mall/task/index.vue` |
 
-> 游戏管理 / 游戏版本这两页**先别急着做**：游戏本体是打进 APK 的
+> 游戏版本这页**先别急着做**：游戏本体是打进 APK 的
 > （`kid-quest-farm-online/src/games/localGames.ts`），`game_release` 表现在是空的。
-> 做出来就是两张空表，而「空」会被读成「游戏被下掉了」。
+> 做出来就是一张空表，而「空」会被读成「游戏被下掉了」。
+> （「游戏列表」已经有页面了：`view/mall/game/index.vue`，只调定价 / 状态 /
+> 默认拥有 / 排序，名字和封面跟着客户端包走，后台不改。）
 
 > ⚠️ **别照这张表把菜单一次性补齐**。菜单加了但 `component` 指向的
 > `.vue` 不存在时，点进去是**空白页**（前端只报一个 404 chunk），

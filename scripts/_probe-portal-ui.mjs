@@ -31,9 +31,11 @@
  *    （只看「有卡片」不够：卡片先画 0 再填数，先看到 0 也算通过）
  * 3. 左侧点得开「心愿单」，能看到那条探针心愿
  * 4. 商家登录后「我的商品」里能看到自己那件
- * 5. 全程没有 pageerror、没有本机 4xx/5xx
+ * 5. 商家的「我的模板」：两个页签都在、有自己的推广码、**看不到官方模板**，
+ *    新建出来的模板落库是 scope=merchant + 本人 uid，删得掉
+ * 6. 全程没有 pageerror、没有本机 4xx/5xx
  */
-import { openAdmin } from './_admin-lib.mjs'
+import { adminApi, openAdmin } from './_admin-lib.mjs'
 
 const WEB = process.env.TF_ADMIN_WEB ?? 'http://localhost:8891/'
 const API = process.env.TF_ADMIN_API ?? 'http://127.0.0.1:8890'
@@ -162,6 +164,19 @@ try {
   )
   check(true, '心愿单页能打开，表格里有自己的心愿')
 
+  /* #16：游戏 / 心愿商城升成后台一级菜单后，家长不该看到它们。
+     只看「菜单没授权」不够 —— 界面层再钉一次，防止哪天种子脚本顺手
+     给 1001 加了授权而 DB 探针没覆盖到。 */
+  const parentAside = await a.page.evaluate(() => {
+    const el = document.querySelector('.el-menu')
+    return el ? (el.innerText || '') : ''
+  })
+  check(
+    !parentAside.includes('游戏') && !parentAside.includes('心愿商城'),
+    '★ 家长侧栏里没有「游戏」/「心愿商城」后台菜单',
+    parentAside.slice(0, 160)
+  )
+
   // 「去下单」= 订单 → item_id 回查 wish_item.buy_url。订单表本身不存 URL，
   // 这条链断掉时页面上什么都不显示，接口也不会报错。
   const link = await a.page.evaluate(() => {
@@ -212,7 +227,124 @@ try {
     return !t.includes('心愿单') && !t.includes('兑换记录')
   })
   check(onlyMine, '商家侧栏里没有家长页面')
+
+  const merchantAside = await a.page.evaluate(() => {
+    const el = document.querySelector('.el-menu')
+    return el ? (el.innerText || '') : ''
+  })
+  check(
+    !merchantAside.includes('游戏') && !merchantAside.includes('心愿商城'),
+    '★ 商家侧栏里没有「游戏」/「心愿商城」后台菜单',
+    merchantAside.slice(0, 160)
+  )
+  check(
+    !merchantAside.includes('模板配置') && merchantAside.includes('我的模板'),
+    '★ 商家侧栏没有超管那个「模板配置」，只有「我的模板」',
+    merchantAside.slice(0, 160)
+  )
   await shot('04-merchant-items')
+
+  // ---------- 我的模板（商家配「我推广的用户看到什么」） ----------
+  console.log('\n== 4.5 商家「我的模板」 ==')
+  /* 上一次跑挂了可能留下同名模板：先按名字清掉，保证可以反复跑。
+     ★ 走的是超管 token（adminApi），但只删这一条探针自己建的。 */
+  const PROBE_TPL = '探针模板-可删'
+  const stale =
+    (await adminApi('/mall/template/list', { page: 1, pageSize: 200, kind: 'task' })).data
+      ?.list ?? []
+  for (const t of stale.filter((x) => x.name === PROBE_TPL)) {
+    await adminApi('/mall/template/delete', { id: t.id })
+  }
+
+  await a.clickByText('商家中心')
+  await sleep(600)
+  await a.clickByText('我的模板')
+  await a.page.waitForFunction(() => location.hash.includes('templates'), { timeout: 20000 })
+  await a.page.waitForFunction(
+    () =>
+      [...document.querySelectorAll('.el-tabs__item')].some(
+        (x) => (x.innerText || '').trim() === '任务模板'
+      ),
+    { timeout: 20000 }
+  )
+  /* ★ 先等推广码那块**渲染出来**再动别的：
+     它是异步拉回来的（v-if 挂上去会把下面的工具栏整体下移 ~70px），
+     而 clickByText 是「量坐标 → 移过去 → 点」，中间那 300ms 里布局一变，
+     点击就落在表格空白处 —— 表现是「点了新建模板，弹窗没出来」，
+     和「按钮坏了」一模一样。实测踩过一次。 */
+  await a.page.waitForFunction(
+    () => /^TF[0-9A-Z]+-/.test(document.querySelector('[data-probe="invite-code"]')?.innerText.trim() ?? ''),
+    { timeout: 20000 }
+  )
+
+  const tplShell = await a.page.evaluate(() => ({
+    tabs: [...document.querySelectorAll('.el-tabs__item')].map((x) => (x.innerText || '').trim()),
+    invite: document.querySelector('[data-probe="invite-code"]')?.innerText.trim() ?? '',
+    rows: [...document.querySelectorAll('[data-probe="tpl-name"]')].map((e) =>
+      e.innerText.trim()
+    )
+  }))
+  check(
+    tplShell.tabs.includes('任务模板') && tplShell.tabs.includes('兑换模板'),
+    '★ 商家这一页两个页签都在（同一个 .vue，按路由 name 定默认页签）',
+    tplShell.tabs.join(',')
+  )
+  check(
+    /^TF[0-9A-Z]+-[0-9A-F]{4}$/.test(tplShell.invite),
+    '★ 显示了自己的推广码（印在物料上，注册时带给 App）',
+    tplShell.invite
+  )
+  check(
+    !tplShell.rows.includes('官方任务模板'),
+    '★★ 商家列表里没有官方模板（数据范围被后端收成 owner_uid=自己）',
+    tplShell.rows.join(',')
+  )
+
+  /* 新建 → 真的挂在商家自己名下 → 删掉。
+     ★ 关键判据不是「界面多了一行」，而是**落库的 scope / owner_uid**：
+       前端没传 scope，后端必须自己收敛成 merchant + 本人。 */
+  await a.clickByText('新建模板')
+  await a.page.waitForSelector('.el-dialog', { timeout: 20000 })
+  await a.fill('input[placeholder="例如：寒假作业模板"]', PROBE_TPL)
+  await a.clickByText('新建')
+  await a.page.waitForFunction(
+    (n) => [...document.querySelectorAll('[data-probe="tpl-name"]')].some((e) => e.innerText.trim() === n),
+    { timeout: 20000 },
+    PROBE_TPL
+  )
+  check(true, '新建的模板出现在列表里')
+
+  const listed =
+    (await adminApi('/mall/template/list', { page: 1, pageSize: 200, kind: 'task' })).data
+      ?.list ?? []
+  const made = listed.find((x) => x.name === PROBE_TPL)
+  check(
+    !!made && made.scope === 'merchant' && made.owner_uid > 0,
+    '★★ 落库是「商家模板 + 本人 uid」（前端不传 scope 也算数）',
+    made ? `scope=${made.scope} owner_uid=${made.owner_uid}` : '没找到'
+  )
+
+  /* 删掉：先点行内「删除」，再点确认框的确认按钮。
+     ★ 确认框里的「删除」和行内那个同名 ⇒ 不能按文字点，直接点主按钮。 */
+  await a.page.evaluate((n) => {
+    const tr = [...document.querySelectorAll('tbody tr.el-table__row')].find((r) =>
+      (r.innerText || '').includes(n)
+    )
+    const btn = tr && [...tr.querySelectorAll('button')].find((b) => (b.innerText || '').trim() === '删除')
+    btn?.click()
+  }, PROBE_TPL)
+  await a.page.waitForSelector('.el-message-box', { timeout: 20000 })
+  await a.page.evaluate(() => {
+    const btn = document.querySelector('.el-message-box__btns .el-button--primary')
+    btn?.click()
+  })
+  await a.page.waitForFunction(
+    (n) => ![...document.querySelectorAll('[data-probe="tpl-name"]')].some((e) => e.innerText.trim() === n),
+    { timeout: 20000 },
+    PROBE_TPL
+  )
+  check(true, '删掉之后列表里也没有了')
+  await shot('04b-merchant-templates')
 
   // 入驻状态页
   await a.clickByText('商家中心')

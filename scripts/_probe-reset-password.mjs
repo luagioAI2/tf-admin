@@ -20,7 +20,7 @@
  *   所有操作都只发生在它身上。
  *
  * 用法：
- *   1) 平台：tf-platform-api 的 tf-api.exe（8090）
+ *   1) 平台：tf-platform-api 的 tf-api.exe（**8080**，端口来自它自己的 config.yaml）
  *   2) 后台：tf-admin/server 的 tf-admin.exe（8890）
  *   3) 前端：tf-admin/web 的 pnpm dev（8891）
  *   4) node scripts/_probe-reset-password.mjs [url]
@@ -28,7 +28,10 @@
 import { adminApi, openAdmin } from './_admin-lib.mjs'
 
 const URL_ = process.argv[2] ?? 'http://localhost:8891/'
-const PLATFORM = process.env.TF_PLATFORM_API ?? 'http://127.0.0.1:8090'
+/* ⚠️ 默认必须是 **8080**：平台的监听端口写在 `tf-platform-api/configs/config.yaml`
+   （`ListenAddress: 0.0.0.0:8080`）。写死 8090 的症状是 `connect ECONNREFUSED`，
+   看着像「平台没起」。*/ 
+const PLATFORM = process.env.TF_PLATFORM_API ?? 'http://127.0.0.1:8080'
 
 let failed = 0
 const ok = (label, pass, detail = '') => {
@@ -58,7 +61,7 @@ const reg = await platform('/auth/register', {
 if (reg.code !== 200) {
   console.error(
     `注册测试账号失败（code=${reg.code} msg=${reg.msg}）——\n` +
-      `  8090 上的 tf-platform-api 起来了吗？（${PLATFORM}）`
+      `  8080 上的 tf-platform-api 起来了吗？（${PLATFORM}）`
   )
   process.exit(2)
 }

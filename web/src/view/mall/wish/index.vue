@@ -581,7 +581,8 @@
 </template>
 
 <script setup>
-  import { computed, onMounted, ref } from 'vue'
+  import { computed, onMounted, ref, watch } from 'vue'
+  import { useRoute } from 'vue-router'
   import { ElMessage, ElMessageBox } from 'element-plus'
   import {
     createWishItem,
@@ -647,7 +648,17 @@
   const formatTs = (ts) => (ts ? formatDate(ts * 1000) : '—')
   const shortUrl = (u) => (u.length > 42 ? u.slice(0, 40) + '…' : u)
 
-  const tab = ref('item')
+  /* 同一个组件挂在三个菜单上：心愿商品 / 心愿单 / 游戏激活码。
+     由路由 name 决定默认落在哪个页签。★ Vue Router 复用同一组件实例时
+     **不会重新执行 setup**，所以必须 watch —— 只给 ref 一个初值会串页
+     （从「心愿商品」点菜单进「心愿单」，还停在上一页那个页签）。 */
+  const MODE_BY_NAME = { mallWish: 'item', wishOrder: 'order', gameCode: 'code' }
+  const route = useRoute()
+  const tab = ref(MODE_BY_NAME[route.name] ?? 'item')
+  watch(
+    () => route.name,
+    (n) => { tab.value = MODE_BY_NAME[n] ?? 'item' }
+  )
 
   /* ---------- 用户（把 uid 换成昵称） ---------- */
   const users = ref([])

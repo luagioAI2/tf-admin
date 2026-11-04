@@ -47,11 +47,15 @@ PAGES = [
     ("appUser", "App 用户", "user", "mall/user/index.vue", "user"),
     ("merchant", "招商审核", "merchant", "mall/merchant/index.vue", "message"),
     # 下面这些**页面还没写**，脚本会自动跳过（并提示），别硬建菜单。
-    ("mallGame", "游戏管理", "game", "mall/game/index.vue", "grid"),
     ("mallRelease", "游戏版本", "release", "mall/release/index.vue", "upload"),
     ("mallRedeem", "兑换商城", "redeem", "mall/redeem/index.vue", "shopping-cart"),
-    ("mallWish", "心愿商城", "wish", "mall/wish/index.vue", "present"),
     ("mallTask", "任务记录", "task", "mall/task/index.vue", "list"),
+    # ★ #16 起「心愿商品 / 心愿单 / 游戏列表 / 游戏激活码」由
+    #   scripts/seed-menu-level2.py 管（升成和商城运营平级的一级菜单）。
+    #   这里再列 mallWish / mallGame 会怎样：mallWish 已存在会跳过，但
+    #   mallGame 这名字库里没有、而 mall/game/index.vue 现在**真的存在**
+    #   ⇒ 本脚本会在「商城运营」下再建一个重复的「游戏管理」并授权 888。
+    #   别把这两条加回来。
 ]
 
 

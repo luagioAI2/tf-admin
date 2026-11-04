@@ -81,13 +81,17 @@ try {
 
   /* ============ ② 菜单 ============ */
   console.log('\n② 菜单')
-  await a.openMallGroup()
+  await a.openWishGroup()
   const menuText = await page.evaluate(() => document.body.innerText)
-  ok('★ 展开「商城运营」后能看到「心愿商城」', menuText.includes('心愿商城'))
+  ok(
+    '★ 展开「心愿商城」后能看到「心愿商品」「心愿单」两个下级',
+    menuText.includes('心愿商品') && menuText.includes('心愿单'),
+    menuText.slice(0, 200)
+  )
 
   /* ============ ③ 打开页面 ============ */
-  console.log('\n③ 打开心愿商城')
-  await a.clickByText('心愿商城')
+  console.log('\n③ 打开心愿商品')
+  await a.clickByText('心愿商品')
   await page.waitForFunction(() => location.hash.includes('wish'), { timeout: 20000 })
   await page.waitForFunction(() => document.body.innerText.includes('心愿商品'), { timeout: 20000 })
   ok('★ 页面渲染出来了（不是空白页）', true)
