@@ -293,6 +293,12 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
           return l.replace(/[:：]\s*$/, '') === t
         })
         if (!it) return null
+        /* ★ 先滚进视口再取坐标。弹窗比视口高时（心愿商品的编辑弹窗就是），
+           靠下的字段 y 会超过 `window.innerHeight` —— 按那个坐标点等于
+           点在视口外面：不报错、什么都不发生，下拉永远打不开，
+           断言红成「下拉里没有那一项」。
+           `scrollIntoView` 默认是 instant，紧接着读 rect 就是滚动后的值。 */
+        it.scrollIntoView({ block: 'center' })
         const box = it.querySelector('.el-select__wrapper') ?? it.querySelector('input')
         if (!box) return null
         const r = box.getBoundingClientRect()

@@ -76,7 +76,7 @@
             <el-table-column align="left" label="归属" width="120">
               <template #default="scope">
                 <span v-if="!scope.row.merchant_uid" class="dim">平台自营</span>
-                <span v-else class="name">{{ userName(scope.row.merchant_uid) }}</span>
+                <span v-else class="name">{{ merchantLabel(scope.row.merchant_uid) }}</span>
               </template>
             </el-table-column>
             <el-table-column align="left" label="外链" min-width="180">
@@ -484,6 +484,23 @@
           <el-input-number v-model="editForm.sort_order" :min="0" :max="9999" :step="1" />
           <div class="hint">数字越小越靠前。盲盒永远排在最前，不受这个影响。</div>
         </el-form-item>
+        <!-- 归属：0 = 平台自营。改的是「谁维护它」，不是「谁收钱」（结算还没做）。
+             商家后台只能看到 / 改到自己名下的商品，见 PortalService.MerchantItems。 -->
+        <el-form-item label="归属">
+          <el-select v-model="editForm.merchant_uid" filterable style="width: 320px">
+            <el-option :value="0" label="平台自营（运营维护）" />
+            <el-option
+              v-for="o in ownerOptions"
+              :key="o.value"
+              :value="o.value"
+              :label="o.label"
+            />
+          </el-select>
+          <div class="hint">
+            划给商家后，这条就只出现在他的后台里。<b>不会自动改价</b>，
+            已经兑换过的订单也不受影响。
+          </div>
+        </el-form-item>
         <el-form-item label="状态">
           <el-switch
             v-model="editForm.archived"
@@ -584,6 +601,7 @@
     updateWishItem
   } from '@/api/mallWish'
   import { getGameOptions } from '@/api/mallGame'
+  import { getMerchantList } from '@/api/mallMerchant'
   import {
     generateWishCodes,
     getWishCodeBatches,
@@ -651,6 +669,26 @@
     if (res.code !== 0) return
     users.value = res.data.list ?? []
     userById.value = Object.fromEntries(users.value.map((u) => [u.id, u]))
+  }
+
+  /* ---------- 商家（「归属」下拉 + 列表里把 uid 换成店铺名） ---------- */
+  const merchants = ref([])
+  const merchantById = ref({})
+  /** 优先用招商表里的 `name`（店铺名）：平台用户列表只拉前 200 条，
+      游客能把首页顶满，商家常常根本不在里面，`userName` 会退化成 `#123`。 */
+  const merchantLabel = (uid) => merchantById.value[uid]?.name || userName(uid)
+  const loadMerchants = async () => {
+    /* 只拉**已通过**的：待审核 / 被拒的还进不了后台，
+       把商品划给他们 = 挂在一个不存在的入口上（商家自己也看不到）。 */
+    const res = await getMerchantList({
+      role: 'merchant',
+      status: 'approved',
+      page: 1,
+      pageSize: 200
+    })
+    if (res.code !== 0) return
+    merchants.value = res.data.list ?? []
+    merchantById.value = Object.fromEntries(merchants.value.map((m) => [m.uid, m]))
   }
 
   /* ---------- 商品 ---------- */
@@ -763,9 +801,27 @@
     buy_url: '',
     buy_label: '',
     sort_order: 100,
+    /** 0 = 平台自营。商家后台看不到 `merchant_uid = 0` 的商品 */
+    merchant_uid: 0,
     archived: false
   })
   const editForm = ref(blankForm())
+
+  /** 归属下拉：值 0 = 平台自营，其余是已通过审核的商家。 */
+  const ownerOptions = computed(() => {
+    const opts = merchants.value.map((m) => ({
+      value: m.uid,
+      label: `${m.name || '（没填店名）'} · #${m.uid}`
+    }))
+    /* 兜底：商品挂在「已经不是已通过商家」的人名下（申请被撤 / 账号注销），
+       下拉里必须留着这一项，否则 el-select 只显示一个光秃秃的数字，
+       运营会以为归属没读到，随手一改就把数据改错了。 */
+    const cur = editForm.value.merchant_uid
+    if (cur && !opts.some((o) => o.value === cur)) {
+      opts.unshift({ value: cur, label: `#${cur}（不在已通过名单里）` })
+    }
+    return opts
+  })
 
   /** `[6,12]` 这种 JSON 文本 → 两个数字。坏数据当「没填」，别让编辑框炸掉 */
   const parseAge = (raw) => {
@@ -813,6 +869,7 @@
       buy_url: row.buy_url || '',
       buy_label: row.buy_label || '',
       sort_order: row.sort_order ?? 100,
+      merchant_uid: row.merchant_uid || 0,
       archived: !!row.archived
     }
     editVisible.value = true
@@ -864,6 +921,7 @@
       buy_url: url,
       buy_label: (f.buy_label ?? '').trim(),
       sort_order: f.sort_order,
+      merchant_uid: f.merchant_uid || 0,
       archived: f.archived
     }
 
@@ -1129,6 +1187,9 @@
 
   onMounted(async () => {
     await loadUsers()
+    /* 商家名单失败不拦页面：归属下拉退化成只有「平台自营」，
+       总比整页白屏好（改价 / 上下架才是这一屏的主活）。 */
+    await loadMerchants()
     /* 游戏下拉：盲盒池和「单款游戏」都要按 game_id 选。
        失败不拦页面 —— 拉不到就退化成空下拉，比整页白屏好。 */
     try {

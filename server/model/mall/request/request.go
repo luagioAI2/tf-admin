@@ -182,6 +182,8 @@ type CreateWishItemReq struct {
 	SortOrder int    `json:"sort_order"`
 	// UnlockCount 一次开出几款（盲盒用）。0 = 按 1 处理（单开）
 	UnlockCount int `json:"unlock_count"`
+	// MerchantUID 归属商家。0 = 平台自营（运营自己建的商品）
+	MerchantUID uint `json:"merchant_uid"`
 }
 
 // UpdateWishItemReq 后台调整心愿商品。
@@ -208,6 +210,12 @@ type UpdateWishItemReq struct {
 	SortOrder   *int      `json:"sort_order"`
 	// UnlockCount 一次开出几款（盲盒用）。nil = 不动
 	UnlockCount *int `json:"unlock_count"`
+	// MerchantUID 归属商家。0 = **平台自营**（不是「没填」）。
+	//
+	// 指针语义：nil = 这次不动，传 0 才是「收回平台自营」。
+	// 用值类型的话，界面只想改个价格也会把它悄悄划回平台 ——
+	// 商家第二天发现自己的商品没了，而操作日志里只记了一条「改价」。
+	MerchantUID *uint `json:"merchant_uid"`
 }
 
 // DeleteWishItemReq 删除心愿商品（只允许删「没人换过」的）

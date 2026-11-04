@@ -183,6 +183,12 @@ func (s *WishService) UpdateItem(ctx context.Context, req request.UpdateWishItem
 		}
 		fields["unlock_count"] = *req.UnlockCount
 	}
+	if req.MerchantUID != nil {
+		// 0 是**有效值**（收回平台自营），判据只能是「指针是不是 nil」。
+		// 写成 `if *req.MerchantUID > 0` 的话，收回自营会静默无效 ——
+		// 界面点了保存、提示「已保存」，商品还挂在商家名下。
+		fields["merchant_uid"] = *req.MerchantUID
+	}
 	if len(fields) == 0 {
 		return nil
 	}
@@ -267,6 +273,7 @@ func (s *WishService) CreateItem(ctx context.Context, req request.CreateWishItem
 		Archived:    req.Archived,
 		SortOrder:   req.SortOrder,
 		UnlockCount: unlock,
+		MerchantUID: req.MerchantUID,
 	}
 	if err := global.GVA_DB.WithContext(ctx).Create(row).Error; err != nil {
 		return "", err

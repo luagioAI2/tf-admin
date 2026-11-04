@@ -61,6 +61,18 @@ const readRows = () =>
     )
   })
 
+/* ★ 按**表头文字**取列下标，别写死「第 5 列」：往表格里插一列（比如「归属」），
+   后面所有列的下标集体后移一位，断言读到的是隔壁列的文字 ——
+   报出来的现象是「外链没刷新」，而接口和界面其实都是对的。 */
+const colIndex = (header) =>
+  page.evaluate((h) => {
+    const t = [...document.querySelectorAll('.el-table')].find((x) => x.offsetParent !== null)
+    if (!t) return -1
+    return [...t.querySelectorAll('thead th')].findIndex(
+      (x) => (x.innerText || '').trim() === h
+    )
+  }, header)
+
 try {
   /* ============ ① 登录 ============ */
   console.log('① 登录后台')
@@ -205,7 +217,13 @@ try {
 
   rows = await readRows()
   const editedRow = rows.find((r) => (r[0] ?? '').includes(target.name)) ?? []
-  ok('表格刷新后外链列显示新文字', (editedRow[4] ?? '').includes(newLabel), editedRow[4])
+  const extCol = await colIndex('外链')
+  ok('★ 商品表里找得到「外链」这一列', extCol >= 0, `列下标 ${extCol}`)
+  ok(
+    '表格刷新后外链列显示新文字',
+    (editedRow[extCol] ?? '').includes(newLabel),
+    `第 ${extCol} 列 ${JSON.stringify(editedRow[extCol])}`
+  )
 
   /* 改回去 —— 探针必须能反复跑 */
   await openEditAndSetLabel(target.buy_label)
@@ -309,6 +327,89 @@ try {
       (saved?.unlock_count ?? 0) === 1,
       `接口 ${saved?.unlock_count}`
     )
+  }
+
+  /* ============ ⑤·2 归属（运营把商品划给商家） ============ */
+  //
+  // 这一段只验**界面接上了**：字段在、值读得对、下拉能开、**保存时带上了**。
+  // 「划过去商家就能看到 / 传 0 收回 / 不带字段不变」这几条语义在
+  // `check-portal-perms.py` 第 7 段用接口钉着 —— 那边能造出「已通过审核的商家」，
+  // 界面这边造不出来（要一条 merchant_application 才能有那个下拉项）。
+  console.log('\n⑤·2 归属')
+  const owned = apiItems.find((x) => !x.merchant_uid)
+  if (!owned) {
+    ok('★ 有一件平台自营的商品可以用来验归属', false, JSON.stringify(apiItems.map((x) => x.merchant_uid)))
+  } else {
+    /* ★ 断言看的是**发出去的请求体**，不是落库结果。
+       少了 `merchant_uid` 时后端按 nil 处理（不动），落库结果和带上时一模一样 ——
+       那种「选完商家保存、什么都没发生」的 bug，只有看包才抓得住。 */
+    let saveBody = null
+    page.on('request', (r) => {
+      if (r.url().includes('/mall/wish/item/update')) saveBody = r.postData() ?? ''
+    })
+    const waitClosed = () =>
+      page.waitForFunction(
+        () => {
+          const d = document.querySelector('.el-dialog')
+          return !d || d.offsetParent === null
+        },
+        { timeout: 20000 }
+      )
+
+    const t = await openEditByName(owned.name)
+    ok('★ 编辑弹窗里有「归属」', t.includes('归属'), t.slice(0, 80))
+    const shownOwner = await page.evaluate(() => {
+      const items = [...document.querySelectorAll('.el-dialog .el-form-item')]
+      const it = items.find((el) =>
+        (el.querySelector('.el-form-item__label')?.innerText || '').includes('归属')
+      )
+      /* ★ 不能用 `input.value`：el-select 里那个 input 是搜索框，值是空的，
+         显示文字在 `.el-form-item__content` 里。用 input.value 读到 ""，
+         断言会红成「界面没显示」，而界面其实好好的。 */
+      return (it?.querySelector('.el-form-item__content')?.innerText || '').trim()
+    })
+    ok(
+      '★ 平台自营的商品：归属显示「平台自营」',
+      shownOwner.includes('平台自营'),
+      `界面 ${JSON.stringify(shownOwner)} / 接口 merchant_uid=${owned.merchant_uid}`
+    )
+    await a.clickByText('保存')
+    await waitClosed()
+    await new Promise((r) => setTimeout(r, 1000))
+    ok(
+      '★ 保存的请求体里带了 merchant_uid',
+      typeof saveBody === 'string' && saveBody.includes('"merchant_uid"'),
+      String(saveBody).slice(0, 200)
+    )
+
+    /* 下拉能开、第一项是「平台自营」（值 0 = 收回自营的那个值） */
+    await openEditByName(owned.name)
+    await a.openSelectByLabel('归属')
+    await new Promise((r) => setTimeout(r, 600))
+    /* ★ 只取**可见**的项：el-select 的 popper 是 append-to-body 的，
+       关掉之后节点还留在 DOM 里（`display:none`）。不加这个过滤，
+       取到的是上一个弹窗里「分类」下拉的残留项
+       （盲盒/游戏/玩具/学习/美食/出行）—— 拿它去 includes('平台自营')
+       会在别的下拉上恰好命中，绿得毫无意义。 */
+    const ownerOpts = await page.evaluate(() =>
+      [...document.querySelectorAll('.el-select-dropdown__item')]
+        .filter((el) => el.offsetParent !== null)
+        .map((el) => (el.innerText || '').trim())
+    )
+    ok(
+      '★ 归属下拉里有「平台自营」且不是别的下拉',
+      ownerOpts.some((x) => x.includes('平台自营')) && !ownerOpts.includes('盲盒'),
+      JSON.stringify(ownerOpts.slice(0, 6))
+    )
+    /* Esc 先关下拉（el-select 自己会 stopPropagation），弹窗还开着就点「取消」。
+       ★ 不先关下拉直接点「取消」的话，popper 可能盖在按钮上 —— 点空。 */
+    await page.keyboard.press('Escape')
+    await new Promise((r) => setTimeout(r, 400))
+    const stillOpen = await page.evaluate(() => {
+      const d = document.querySelector('.el-dialog')
+      return !!d && d.offsetParent !== null
+    })
+    if (stillOpen) await closeEdit()
   }
 
   /* ============ ⑥ 心愿单页签 ============ */

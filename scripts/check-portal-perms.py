@@ -441,6 +441,66 @@ def run_checks(conn, pa, pb, ma, mb, pend):
     check(str(d.get("data", {}).get("userInfo", {}).get("userName")) == "app_%d" % pa,
           "取回的仍是影子账号", str(d.get("data", {}).get("userInfo", {}).get("userName")))
 
+    # ---------- 7. 运营把商品划给商家 ----------
+    #
+    # ★ 第 5 段测的是「商家只看得到自己名下的」，这一段测的是
+    #   **「名下」是怎么被写进去的**。中间那根线没测的话，
+    #   两端各自全绿：商家侧过滤是对的、运营侧保存也提示成功，
+    #   而实际发生的是「运营改一次价，商品被悄悄收回平台」。
+    print("\n== 7. 运营划归属 ==")
+    a_tok2 = admin_token()
+    new_id = "probe_goods_owner_%d" % int(time.time())
+
+    def merchant_ids(tok):
+        """某个商家在门户里看到的商品 id（拿不到 token 就返回 None）。"""
+        if not tok:
+            return None
+        _s, dd = http("POST", BASE + "/mall/portal/merchant/items",
+                      {"page": 1, "pageSize": 100}, tok)
+        if not isinstance(dd, dict) or dd.get("code") != 0:
+            return None
+        return [x.get("item_id") for x in (dd.get("data", {}).get("list") or [])]
+
+    _s, d = http("POST", BASE + "/mall/wish/item/create",
+                 {"item_id": new_id, "kind": "goods", "name": "探针待划拨",
+                  "price_cents": 9900}, a_tok2)
+    check(isinstance(d, dict) and d.get("code") == 0, "运营新建一件平台自营商品", str(d))
+    row = conn.execute("SELECT merchant_uid FROM wish_item WHERE item_id=?", (new_id,)).fetchone()
+    check(row is not None and row[0] == 0, "新建时归属默认 0（平台自营）", str(row))
+
+    before = merchant_ids(m_tok)
+    check(before is not None and new_id not in before, "还没划拨时商家 A 看不到它", str(before))
+
+    # 划给商家 A
+    _s, d = http("POST", BASE + "/mall/wish/item/update",
+                 {"item_id": new_id, "merchant_uid": ma}, a_tok2)
+    check(isinstance(d, dict) and d.get("code") == 0, "运营把它划给商家 A", str(d))
+    row = conn.execute("SELECT merchant_uid FROM wish_item WHERE item_id=?", (new_id,)).fetchone()
+    check(row is not None and row[0] == ma, "归属真的落库了（0 -> %d）" % ma, str(row))
+    after = merchant_ids(m_tok)
+    check(after is not None and new_id in after, "划过去之后商家 A 立刻能看到", str(after))
+    other = merchant_ids(mb_tok)
+    check(other is not None and new_id not in other, "商家 B 看不到（划的是 A）", str(other))
+
+    # ★ 只改价格、不带 merchant_uid ⇒ 归属必须**保持不变**。
+    #   这一条红了说明字段退化成了值类型：运营改一次价就把商品收回平台，
+    #   而界面上只会提示「已保存」。
+    _s, d = http("POST", BASE + "/mall/wish/item/update",
+                 {"item_id": new_id, "price_cents": 8800}, a_tok2)
+    row = conn.execute("SELECT merchant_uid, price_cents FROM wish_item WHERE item_id=?",
+                       (new_id,)).fetchone()
+    check(row is not None and row[0] == ma, "改价不带 merchant_uid 时归属不变", str(row))
+    check(row is not None and row[1] == 8800, "改价本身生效了（9900 -> 8800）", str(row))
+
+    # 显式传 0 = 收回平台自营。判据只能是「指针是不是 nil」——
+    # 写成「值 > 0 才写」的话这一条会静默无效。
+    _s, d = http("POST", BASE + "/mall/wish/item/update",
+                 {"item_id": new_id, "merchant_uid": 0}, a_tok2)
+    row = conn.execute("SELECT merchant_uid FROM wish_item WHERE item_id=?", (new_id,)).fetchone()
+    check(row is not None and row[0] == 0, "显式传 0 = 收回平台自营（落库了）", str(row))
+    gone = merchant_ids(m_tok)
+    check(gone is not None and new_id not in gone, "收回后商家 A 的列表里没有了", str(gone))
+
 
 if __name__ == "__main__":
     sys.exit(main())
