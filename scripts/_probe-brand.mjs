@@ -72,15 +72,22 @@ try {
   check(!head.text.includes('前往初始化'), '没有「前往初始化」入口')
   // 图标没加载出来时是 0×0，页面照样「不报错」——只有 naturalWidth 能看出来
   check(head.logo && head.logo.w > 0, '图标加载出来了', JSON.stringify(head.logo))
-  /* 登录页不写「解释性提示语」：标语、账号从哪来、权限怎么定、先申请再审核。
-     这些话放登录页就是营销腔；真需要时，服务端在登录报错里说。 */
-  const HINT_WORDS = [
-    '完成小任务', '经营大农场', '不用另记账号', '申请并通过审核',
-    '账号的权限', '请用 App', '用 App 的手机号和密码登录', '看到什么由权限决定',
-    '运营后台 · 家长'
+  /* 登录页不写「解释性提示语」：账号从哪来、权限怎么定、先申请再审核。
+     这些话放登录页就是营销腔；真需要时，服务端在登录报错里说。
+     ★ 品牌标语（.login-slogan）不算这类提示：它是产品的性格，不是说明文。
+       之前把「去俗」做成「去性格」被否了 —— 这里反过来钉一条「标语在」。 */
+  const EXPLANATORY_HINTS = [
+    '不用另记账号', '申请并通过审核', '账号的权限', '请用 App',
+    '用 App 的手机号和密码登录', '看到什么由权限决定', '运营后台 · 家长',
+    '先申请再审核', '家长 / 商家直接'
   ]
-  const leftHints = HINT_WORDS.filter((w) => head.text.includes(w))
-  check(leftHints.length === 0, '登录页没有标语和解释性提示语', leftHints.join(','))
+  const leftHints = EXPLANATORY_HINTS.filter((w) => head.text.includes(w))
+  check(leftHints.length === 0, '登录页没有解释性提示语', leftHints.join(','))
+  const slogan = await a.page.evaluate(() => {
+    const el = document.querySelector('.login-slogan')
+    return el ? (el.innerText || '').trim() : null
+  })
+  check(!!slogan, '登录页保留了品牌标语（不是无性格的空壳）', JSON.stringify(slogan))
 
   /* 单屏居中：原版是「左边表单 + 右边半屏大绿块」，那块绿占了一半屏幕却
      没多讲一件事。判据读**渲染结果**，不读源码里有没有某个 class。 */
@@ -88,18 +95,31 @@ try {
     const root = document.querySelector('#userLayout')
     // ⚠️ 必须 scope 到登录容器：浏览器装的 Vue DevTools 会往 body 里塞一个
     //    带 linear-gradient 的锚点 div，全页扫会平白多出一条渐变，报成「还有绿块」。
-    const grad = root
-      ? [...root.querySelectorAll('div')].filter((d) =>
-          getComputedStyle(d).backgroundImage.includes('gradient')
-        )
-      : []
+    const divs = root ? [...root.querySelectorAll('div')] : []
+    const grad = divs.filter((d) =>
+      getComputedStyle(d).backgroundImage.includes('gradient')
+    )
+    /* 「半屏绿块」按几何判：宽 >40% 且高 >65% 的实心块。
+       柔光圆是纯色 + blur、尺寸远小于半屏；细点阵是 transparent 底，都不算。 */
+    const half = divs.filter((d) => {
+      const r = d.getBoundingClientRect()
+      return (
+        r.width > window.innerWidth * 0.4 &&
+        r.height > window.innerHeight * 0.65 &&
+        getComputedStyle(d).backgroundColor !== 'rgba(0, 0, 0, 0)'
+      )
+    })
     return {
       justify: root ? getComputedStyle(root).justifyContent : null,
-      gradients: grad.length
+      bg: root ? getComputedStyle(root).backgroundColor : null,
+      gradients: grad.length,
+      halfBlocks: half.length
     }
   })
   check(layout.justify === 'center', '登录框整屏居中', JSON.stringify(layout))
-  check(layout.gradients === 0, '没有右半屏的绿色大色块', JSON.stringify(layout))
+  check(layout.bg === 'rgb(255, 252, 243)', '登录底色是暖奶油，不是冷灰纸', JSON.stringify(layout))
+  check(layout.gradients === 0, '登录容器里没有渐变色块', JSON.stringify(layout))
+  check(layout.halfBlocks === 0, '没有右半屏的绿色大色块', JSON.stringify(layout))
 
   /* ★ 主色要**读渲染结果**，不能只看源码里写了什么。
      这条链有三段：`app.js` 的 primaryColor → `setBodyPrimaryColor()` 写内联
@@ -108,25 +128,42 @@ try {
      样式表那份被无声覆盖 —— 而 build 和其余断言全绿。 */
   const brand = await a.page.evaluate(() => {
     const b = document.querySelector('.el-button--primary')
+    const cs = b ? getComputedStyle(b) : null
     return {
-      bg: b ? getComputedStyle(b).backgroundColor : null,
+      bg: cs ? cs.backgroundColor : null,
+      image: cs ? cs.backgroundImage : null,
+      shadow: cs ? cs.boxShadow : null,
       primary: getComputedStyle(document.documentElement)
         .getPropertyValue('--el-color-primary')
         .trim()
     }
   })
-  /* 入口单独收敛成「中性纸 + 近黑墨」，但整个后台的主色链不能断：
-     `app.js` primaryColor → setBodyPrimaryColor() 内联变量 → 其它页面的按钮。
-     所以两条都钉：全局变量仍是农场绿，登录按钮是墨色。 */
+  /* 主色链不能断：`app.js` primaryColor → setBodyPrimaryColor() 内联变量 → 其它页面的按钮。
+     登录按钮单独做成「绿渐变 + 投影」：扁平、有厚度、有科技感，不是近黑墨块。
+     三条都钉渲染结果：主色链 / 按钮是绿的 / 真的有渐变和阴影。 */
   check(
     brand.primary === '#15803d',
     '全局主色仍是农场绿 #15803d（三段链没断）',
     JSON.stringify(brand)
   )
   check(
-    brand.bg === 'rgb(22, 24, 26)',
-    '登录按钮是近黑墨色，不是饱和绿',
+    brand.bg === 'rgb(21, 128, 61)',
+    '登录按钮是农场绿，不是近黑墨色',
     JSON.stringify(brand)
+  )
+  check(
+    (brand.image ?? '').includes('gradient') && (brand.shadow ?? '') !== 'none',
+    '登录按钮有渐变与投影（扁平阴影科技感）',
+    JSON.stringify(brand)
+  )
+  const cardShadow = await a.page.evaluate(() => {
+    const el = document.querySelector('.login-card')
+    return el ? getComputedStyle(el).boxShadow : null
+  })
+  check(
+    (cardShadow ?? '').split('rgba').length >= 4,
+    '登录白卡是分层阴影，不是纸片',
+    JSON.stringify(cardShadow)
   )
   await shot('brand-01-login')
 
@@ -175,8 +212,8 @@ try {
   check((shell.aside ?? '').includes('商城运营'), '侧边栏还有「商城运营」（没把业务菜单一起藏掉）')
   check(!(shell.aside ?? '').includes('编程辅助'), '侧边栏没有框架的「编程辅助」开发组')
   check(
-    shell.activeBg === 'rgb(22, 24, 26)',
-    '侧边栏选中项是近黑墨色，不是饱和绿',
+    shell.activeBg === 'rgb(231, 244, 236)',
+    '侧边栏选中项是柔和浅绿扁平块，不是近黑墨块',
     JSON.stringify(shell.activeBg)
   )
 

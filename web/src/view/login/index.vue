@@ -1,18 +1,33 @@
 <template>
-  <!-- 后台入口。
-       上一版是奶油底 + 大圆角白卡 + 饱和绿按钮 + 标语 + 两行说明，
-       整套是「母婴 / 营销页」的配方，看着俗。这一版换成中性纸 + 近黑墨 +
-       宋体标题，主色只留一小段线；不加投影、不加标语、不加解释。 -->
+  <!-- 后台入口：单屏居中。
+       以「之前」那版的暖色性格为底（奶油底 / 大圆角 logo / 绿标题 / 标语 / 白卡 / 绿按钮），
+       补上扁平设计、分层阴影与一点科技感：柔光、细点阵、状态点、渐变按钮。
+       不再有右半屏绿块，也不留任何解释账号 / 权限的提示语。 -->
   <div id="userLayout" class="login-bg">
+    <!-- 氛围层用「纯色圆 + 滤镜模糊」，不用渐变：渐变一铺开就成了那块难看的绿。 -->
+    <div class="login-orb login-orb--green" aria-hidden="true"></div>
+    <div class="login-orb login-orb--amber" aria-hidden="true"></div>
+    <div class="login-grid" aria-hidden="true"></div>
+
     <div class="login-col">
       <header class="login-head">
-        <img src="/logo.png" alt="小任务农场" class="login-logo" />
-        <p class="login-kicker">运营后台</p>
+        <div class="login-logo-wrap">
+          <img src="/logo.png" alt="小任务农场" class="login-logo" />
+        </div>
+        <p class="login-kicker">
+          <span class="login-kicker-dot" aria-hidden="true"></span>运营后台
+        </p>
         <h1 class="login-title">小任务农场</h1>
-        <span class="login-rule" aria-hidden="true"></span>
+        <p class="login-slogan">完成小任务，经营大农场</p>
       </header>
 
-      <div class="login-panel">
+      <div class="login-card">
+        <div class="login-card-head">
+          <span class="login-card-line" aria-hidden="true"></span>
+          <span class="login-card-label">欢迎回来</span>
+          <span class="login-card-line" aria-hidden="true"></span>
+        </div>
+
         <!-- 一个输入框按内容分路：手机号走门户登录，其余走后台登录。 -->
         <el-form
           ref="loginForm"
@@ -79,6 +94,11 @@
           </el-form-item>
         </el-form>
       </div>
+
+      <p class="login-foot">
+        <span class="login-foot-dot" aria-hidden="true"></span>
+        小任务农场 · 运营后台
+      </p>
     </div>
   </div>
 </template>
@@ -217,104 +237,251 @@
 <style>
   /* 登录页是独立路由，用全局样式即可；类名都带 login- 前缀，不会漏到别处。 */
   .login-bg {
+    position: relative;
     min-height: 100vh;
-    background: #fafaf9;
+    overflow: hidden;
+    background: #fffcf3;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 48px 24px;
+    padding: 40px 24px;
   }
+
+  /* 柔光：纯色 + blur。刻意不用渐变 —— 渐变铺开就是那块被否掉的半屏绿。 */
+  .login-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(72px);
+    pointer-events: none;
+  }
+  .login-orb--green {
+    width: 420px;
+    height: 420px;
+    top: -140px;
+    left: -120px;
+    background: #34d399;
+    opacity: 0.2;
+  }
+  .login-orb--amber {
+    width: 380px;
+    height: 380px;
+    right: -120px;
+    bottom: -150px;
+    background: #fbbf24;
+    opacity: 0.16;
+  }
+  /* 细点阵：SVG 平铺（background-image 是 url，不是 gradient），给一点科技感。 */
+  .login-grid {
+    position: absolute;
+    inset: 0;
+    opacity: 0.07;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26'%3E%3Ccircle cx='2' cy='2' r='1.1' fill='%2315803d'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
   .login-col {
+    position: relative;
+    z-index: 1;
     width: 100%;
-    max-width: 320px;
+    max-width: 400px;
   }
   .login-head {
     text-align: center;
-    margin-bottom: 28px;
+    margin-bottom: 22px;
+  }
+  .login-logo-wrap {
+    width: 76px;
+    height: 76px;
+    margin: 0 auto 18px;
+    border-radius: 22px;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+      0 1px 2px rgba(20, 83, 45, 0.06),
+      0 10px 24px -10px rgba(20, 83, 45, 0.35),
+      0 0 0 1px rgba(21, 128, 61, 0.1);
   }
   .login-logo {
-    width: 40px;
-    height: 40px;
-    border-radius: 4px;
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    object-fit: contain;
     display: block;
-    margin: 0 auto 22px;
   }
   .login-kicker {
-    font-size: 11px;
-    letter-spacing: 0.22em;
-    color: #8a8a85;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
     margin: 0 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    color: #15803d;
+  }
+  .login-kicker-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+    animation: login-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes login-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
   }
   .login-title {
-    font-family: 'Songti SC', 'Noto Serif SC', 'SimSun', serif;
-    font-size: 27px;
-    font-weight: 400;
-    letter-spacing: 0.02em;
-    color: #16181a;
     margin: 0;
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #14532d;
+    line-height: 1.25;
   }
-  .login-rule {
-    display: block;
-    width: 22px;
-    height: 2px;
-    background: #2f5d4a;
-    margin: 18px auto 0;
+  .login-slogan {
+    margin: 9px 0 0;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    color: #4b7a5c;
   }
-  .login-panel {
+
+  .login-card {
     background: #ffffff;
-    border: 1px solid #e7e5e4;
-    border-radius: 2px;
-    padding: 26px 26px 20px;
+    border: 1px solid rgba(21, 128, 61, 0.1);
+    border-radius: 20px;
+    padding: 26px 26px 22px;
+    /* 分层阴影：近处一层薄边、中景一层主影、远景一层扩散 —— 扁平但有厚度 */
+    box-shadow:
+      0 1px 2px rgba(20, 83, 45, 0.05),
+      0 14px 34px -14px rgba(20, 83, 45, 0.28),
+      0 30px 70px -40px rgba(20, 83, 45, 0.22);
   }
+  .login-card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+  .login-card-line {
+    flex: 1;
+    height: 1px;
+    background: #e8efe9;
+  }
+  .login-card-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    color: #6b7c6f;
+    white-space: nowrap;
+  }
+
   .login-form .el-form-item {
-    margin-bottom: 20px;
+    margin-bottom: 18px;
   }
   .login-form .el-form-item__content {
     line-height: normal;
   }
   .login-form .el-input__wrapper {
-    background: transparent !important;
+    background: #f7faf6 !important;
     box-shadow: none !important;
-    border: 0 !important;
-    border-bottom: 1px solid #d6d3d1 !important;
-    border-radius: 0 !important;
-    padding: 0 2px !important;
+    border: 1px solid #e3ece4 !important;
+    border-radius: 11px !important;
+    padding: 1px 12px !important;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  }
+  .login-form .el-input__wrapper:hover {
+    border-color: #b9d8c2 !important;
   }
   .login-form .el-input__wrapper.is-focus {
-    border-bottom-color: #16181a !important;
+    background: #ffffff !important;
+    border-color: #15803d !important;
+    box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.12) !important;
   }
   .login-form .el-input__inner {
     height: 44px;
     font-size: 14px;
-    color: #16181a;
+    color: #14532d;
   }
   .login-form .el-input__inner::placeholder {
-    color: #a8a29e;
+    color: #9aa8a0;
   }
   .login-captcha {
     width: 33%;
-    height: 44px;
-    border: 1px solid #e7e5e4;
+    height: 46px;
+    border: 1px solid #e3ece4;
+    border-radius: 11px;
     overflow: hidden;
+    background: #f7faf6;
   }
   .login-actions {
-    margin-top: 30px;
+    margin-top: 26px;
     margin-bottom: 0 !important;
   }
   .login-submit.el-button {
     width: 100%;
-    height: 42px;
-    background: #16181a !important;
-    border-color: #16181a !important;
-    border-radius: 2px !important;
-    box-shadow: none !important;
-    font-size: 14px;
-    font-weight: 400;
-    letter-spacing: 0.2em;
-    color: #ffffff;
+    height: 46px;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: linear-gradient(135deg, #22a55b 0%, #15803d 100%) !important;
+    background-color: #15803d !important;
+    box-shadow:
+      0 8px 20px -6px rgba(21, 128, 61, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    color: #ffffff !important;
+    transition: transform 0.18s, box-shadow 0.18s;
   }
   .login-submit.el-button:hover {
-    background: #303336 !important;
-    border-color: #303336 !important;
+    transform: translateY(-1px);
+    box-shadow:
+      0 12px 26px -6px rgba(21, 128, 61, 0.65),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
+    color: #ffffff !important;
+  }
+
+  .login-foot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 20px 0 0;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: #9aa99e;
+  }
+  .login-foot-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #a7c4ae;
+  }
+
+  @media (max-width: 480px) {
+    .login-bg {
+      padding: 28px 16px;
+    }
+    .login-orb--green {
+      width: 260px;
+      height: 260px;
+    }
+    .login-orb--amber {
+      width: 240px;
+      height: 240px;
+    }
+    .login-card {
+      padding: 22px 20px 18px;
+    }
+    .login-title {
+      font-size: 26px;
+    }
   }
 </style>

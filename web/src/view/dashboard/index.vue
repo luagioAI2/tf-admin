@@ -3,24 +3,31 @@
        原来这一屏是框架自己的宣传页（访问人数 / 新增客户 / 最新插件 /
        授权版演示 / 购买商业授权），家长和商家看到只会以为走错了地方。
        现在只回答两个问题：**现在有什么要处理的**、**常用入口在哪**。 -->
-  <div class="min-h-full bg-[#fafaf9] p-4 lg:p-6">
+  <div class="min-h-full bg-[#fffcf3] p-4 lg:p-6">
     <!-- ============ 抬头 ============ -->
-    <section class="border-b border-[#e7e5e4] px-1 pb-5">
-      <div class="flex items-center gap-3">
+    <section
+      class="flex items-center gap-3 rounded-2xl border border-[#e6efe6] bg-white px-5 py-4 shadow-md"
+    >
+      <div
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f0f8f2] shadow-sm"
+      >
         <img
           src="/logo.png"
           alt="小任务农场"
-          class="h-8 w-8 rounded-sm object-contain"
+          class="h-8 w-8 rounded-lg object-contain"
         />
-        <div class="min-w-0">
-          <p class="truncate text-base font-normal text-[#16181a]">
-            {{ greeting }}，{{ nickName }}
-          </p>
-          <p class="mt-1 text-xs text-[#8a8a85]">
-            {{ today }} · {{ roleName }}
-          </p>
-        </div>
       </div>
+      <div class="min-w-0">
+        <p class="truncate text-base font-semibold text-[#14532d]">
+          {{ greeting }}，{{ nickName }}
+        </p>
+        <p class="mt-1 text-xs text-[#6b7c6f]">
+          {{ today }} · {{ roleName }}
+        </p>
+      </div>
+      <span
+        class="ml-auto hidden h-2 w-2 rounded-full bg-[#22c55e] shadow-[0_0_0_4px_rgba(34,197,94,0.16)] sm:block"
+      ></span>
     </section>
 
     <!-- ============ 现在要处理的四件事 ============ -->
@@ -29,14 +36,18 @@
         v-for="k in kpis"
         :key="k.key"
         :data-kpi="k.key"
-        class="rounded-sm border bg-white px-5 py-4 transition"
-        :class="k.warn ? 'border-[#e5b9bd]' : 'border-[#e7e5e4]'"
+        class="rounded-2xl border bg-white px-5 py-4 shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+        :class="k.warn ? 'border-[#e5b9bd]' : 'border-[#e6efe6]'"
       >
-        <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span
+            class="h-1.5 w-1.5 shrink-0 rounded-full"
+            :class="k.warn ? 'bg-[#d97757]' : 'bg-[#15803d]'"
+          ></span>
           <span class="text-sm text-slate-500">{{ k.label }}</span>
         </div>
         <!-- `kpi-v` 是探针的锚点：数字和接口对不对得上，只认这一个 class -->
-        <div class="kpi-v mt-2 text-3xl font-normal text-[#16181a]">
+        <div class="kpi-v mt-2 text-3xl font-semibold text-[#14532d]">
           {{ k.value }}
         </div>
         <div class="mt-1 text-xs text-slate-400">
@@ -54,20 +65,20 @@
     </div>
 
     <!-- ============ 常用入口 ============ -->
-    <section class="mt-4 rounded-sm border border-[#e7e5e4] bg-white p-5">
+    <section class="mt-4 rounded-2xl border border-[#e6efe6] bg-white p-5 shadow-md">
       <div class="flex items-baseline justify-between">
-        <h2 class="text-base font-normal text-[#16181a]">常用入口</h2>
+        <h2 class="text-base font-semibold text-[#14532d]">常用入口</h2>
       </div>
       <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <button
           v-for="s in shortcuts"
           :key="s.name"
           type="button"
-          class="flex items-center gap-3 rounded-sm border border-[#e7e5e4] bg-white px-4 py-3 text-left transition hover:border-[#2f5d4a]"
+          class="flex items-center gap-3 rounded-xl border border-[#e6efe6] bg-[#fbfdf9] px-4 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[#15803d] hover:shadow-md"
           @click="go(s.path)"
         >
           <span class="min-w-0">
-            <span class="block truncate text-sm font-medium text-slate-800">
+            <span class="block truncate text-sm font-medium text-[#14532d]">
               {{ s.title }}
             </span>
             <span class="block truncate text-xs text-slate-400">
@@ -85,7 +96,7 @@
          0 看起来像一个真实的数，运营会以为「今天真的没人申请」。 -->
     <p
       v-if="state === 'fail'"
-      class="mt-4 rounded-sm border border-[#e5b9bd] bg-[#fff6f6] px-4 py-3 text-sm text-[#a32d2d]"
+      class="mt-4 rounded-2xl border border-[#e5b9bd] bg-[#fff6f6] px-4 py-3 text-sm text-[#a32d2d] shadow-sm"
     >
       上面的数字没拉到：{{ errMsg }}。稍后点右上角刷新再试。
     </p>
