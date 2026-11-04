@@ -105,6 +105,26 @@ APIS = [
     ("POST", "/mall/portal/merchant/item/save", "商家保存商品", "门户·商家", False),
 ]
 
+# 商家能配自己的任务 / 兑换模板（1002 商家、1003 家长+商家）。
+#
+# ★ 家长 1001 **故意不给**：它连后台模板页都看不到，接口再放行等于留个后门。
+# ★ 这 9 个接口的 sys_apis 登记在 seed-mall.py（888 那份）；这里只补商家角色的
+#   casbin。两个脚本都幂等，谁先谁后跑都行。
+# ★ casbin 只回答「能不能调这个地址」，**不回答「能改谁的模板」**：
+#   服务层还要按 token 把范围收成 scope=merchant AND owner_uid=自己
+#   （见 server/service/mall/template.go 的 TemplateActor）。
+MERCHANT_TEMPLATE_APIS = [
+    ("POST", "/mall/template/list"),
+    ("POST", "/mall/template/detail"),
+    ("POST", "/mall/template/create"),
+    ("POST", "/mall/template/update"),
+    ("POST", "/mall/template/delete"),
+    ("POST", "/mall/template/set-default"),
+    ("POST", "/mall/template/item/save"),
+    ("POST", "/mall/template/item/delete"),
+    ("POST", "/mall/template/invite-code"),
+]
+
 # 哪个角色能调哪些接口。**故意分开写**：
 # 家长拿不到商家接口，商家也拿不到家长接口 —— 两者数据互不可见。
 ROLE_APIS = {
@@ -117,7 +137,7 @@ ROLE_APIS = {
         ("GET", "/mall/portal/merchant/status"),
         ("POST", "/mall/portal/merchant/items"),
         ("POST", "/mall/portal/merchant/item/save"),
-    ],
+    ] + MERCHANT_TEMPLATE_APIS,
 }
 
 # 所有登录后都要调的「外壳接口」。两个角色都要。

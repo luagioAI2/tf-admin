@@ -87,6 +87,19 @@ APIS = [
     ("POST", "/mall/merchant/list", "招商申请列表", "招商"),
     ("POST", "/mall/merchant/review", "审核招商申请", "招商"),
     ("GET", "/mall/merchant/pending-count", "待审核数", "招商"),
+    # 任务 / 兑换模板（官方兜底 + 商家自定义）
+    # ⚠️ 9 个全在 PrivateGroup 下，少一条 casbin 就是「点一下没反应 / 权限不足」；
+    #    写操作还挂了 OperationRecord，更要逐个登记。
+    # ⚠️ 商家角色（1002/1003）的 casbin 在 seed-portal.py 里补，家长 1001 不给。
+    ("POST", "/mall/template/list", "模板列表", "模板"),
+    ("POST", "/mall/template/detail", "模板详情", "模板"),
+    ("POST", "/mall/template/create", "新建模板", "模板"),
+    ("POST", "/mall/template/update", "改模板头", "模板"),
+    ("POST", "/mall/template/delete", "删除模板", "模板"),
+    ("POST", "/mall/template/set-default", "设为默认模板", "模板"),
+    ("POST", "/mall/template/item/save", "保存模板条目", "模板"),
+    ("POST", "/mall/template/item/delete", "删除模板条目", "模板"),
+    ("POST", "/mall/template/invite-code", "我的邀请码", "模板"),
 ]
 
 

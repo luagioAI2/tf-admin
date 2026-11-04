@@ -31,6 +31,8 @@ type ServiceGroup struct {
 	MerchantService
 	// PortalService 家长 / 商家门户（App 账号登录 + 按 uid 过滤）
 	PortalService
+	// TemplateService 任务 / 兑换模板配置（按 scope / owner_uid 隔离）
+	TemplateService
 }
 
 // txOrDB 取事务句柄（没传事务就用普通 DB）。

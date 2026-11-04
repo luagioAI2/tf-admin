@@ -113,6 +113,7 @@ func Routers() *gin.Engine {
 		mallRouter.InitTaskRouter(PrivateGroup)         // 任务
 		mallRouter.InitMerchantRouter(PrivateGroup)     // 招商审核
 		mallRouter.InitPortalRouter(PrivateGroup)       // 家长 / 商家门户
+		mallRouter.InitTemplateRouter(PrivateGroup)     // 任务 / 兑换模板
 	}
 
 	//插件路由安装

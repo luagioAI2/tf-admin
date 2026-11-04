@@ -22,6 +22,7 @@ type RouterGroup struct {
 	MerchantRouter
 	// PortalRouter 家长 / 商家门户（App 账号登录，按 uid 看自己的数据）
 	PortalRouter
+	TemplateRouter
 }
 
 var (
@@ -35,6 +36,7 @@ var (
 	dashboardApi    = api.ApiGroupApp.MallApiGroup.DashboardApi
 	merchantApi     = api.ApiGroupApp.MallApiGroup.MerchantApi
 	portalApi       = api.ApiGroupApp.MallApiGroup.PortalApi
+	templateApi     = api.ApiGroupApp.MallApiGroup.TemplateApi
 )
 
 // ============================ 游戏与版本 ============================
@@ -206,5 +208,31 @@ func (r *PortalRouter) InitPortalRouter(router *gin.RouterGroup) {
 		groupWithoutRecord.POST("parent/records", portalApi.ParentRecords)
 		groupWithoutRecord.GET("merchant/status", portalApi.MerchantStatus)
 		groupWithoutRecord.POST("merchant/items", portalApi.MerchantItems)
+	}
+}
+
+// ============================ 任务 / 兑换模板 ============================
+
+type TemplateRouter struct{}
+
+// InitTemplateRouter 模板配置路由
+//
+// ⚠️ 写操作挂 `middleware.OperationRecord()`：运营改的是「所有新用户首启
+// 看到什么」，出了事要查得到是谁在什么时候把默认任务换成了一套别的。
+func (r *TemplateRouter) InitTemplateRouter(router *gin.RouterGroup) {
+	group := router.Group("mall/template").Use(middleware.OperationRecord())
+	groupWithoutRecord := router.Group("mall/template")
+	{
+		group.POST("create", templateApi.Create)
+		group.POST("update", templateApi.Update)
+		group.POST("delete", templateApi.Delete)
+		group.POST("set-default", templateApi.SetDefault)
+		group.POST("item/save", templateApi.SaveItem)
+		group.POST("item/delete", templateApi.DeleteItem)
+	}
+	{
+		groupWithoutRecord.POST("list", templateApi.List)
+		groupWithoutRecord.POST("detail", templateApi.Detail)
+		groupWithoutRecord.POST("invite-code", templateApi.InviteCode)
 	}
 }
