@@ -72,7 +72,26 @@ try {
   check(!head.text.includes('前往初始化'), '没有「前往初始化」入口')
   // 图标没加载出来时是 0×0，页面照样「不报错」——只有 naturalWidth 能看出来
   check(head.logo && head.logo.w > 0, '图标加载出来了', JSON.stringify(head.logo))
-  check(head.text.includes('完成小任务'), '右栏是产品的标语，不是框架的演示图')
+  check(head.text.includes('完成小任务'), '页面有产品标语，不是框架的演示图')
+
+  /* 单屏居中：原版是「左边表单 + 右边半屏大绿块」，那块绿占了一半屏幕却
+     没多讲一件事。判据读**渲染结果**，不读源码里有没有某个 class。 */
+  const layout = await a.page.evaluate(() => {
+    const root = document.querySelector('#userLayout')
+    // ⚠️ 必须 scope 到登录容器：浏览器装的 Vue DevTools 会往 body 里塞一个
+    //    带 linear-gradient 的锚点 div，全页扫会平白多出一条渐变，报成「还有绿块」。
+    const grad = root
+      ? [...root.querySelectorAll('div')].filter((d) =>
+          getComputedStyle(d).backgroundImage.includes('gradient')
+        )
+      : []
+    return {
+      justify: root ? getComputedStyle(root).justifyContent : null,
+      gradients: grad.length
+    }
+  })
+  check(layout.justify === 'center', '登录框整屏居中', JSON.stringify(layout))
+  check(layout.gradients === 0, '没有右半屏的绿色大色块', JSON.stringify(layout))
 
   /* ★ 主色要**读渲染结果**，不能只看源码里写了什么。
      这条链有三段：`app.js` 的 primaryColor → `setBodyPrimaryColor()` 写内联
