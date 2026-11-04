@@ -16,7 +16,10 @@ export const useAppStore = defineStore('app', () => {
     layout_side_width: 256,
     layout_side_collapsed_width: 80,
     layout_side_item_height: 48,
-    show_watermark: true,
+    // 水印默认关：内容是**当前用户的昵称**，铺满整屏对家长 / 商家是纯噪音
+    // （而且这个开关只存在内存里，刷新就回到默认值，开着也留不住）。
+    // 想临时看效果：系统设置 → 外观 → 水印。
+    show_watermark: false,
     side_mode: 'normal',
     // 页面过渡动画配置
     transition_type: 'slide',
@@ -113,7 +116,10 @@ export const useAppStore = defineStore('app', () => {
     layout_side_width: 256,
     layout_side_collapsed_width: 80,
     layout_side_item_height: 48,
-    show_watermark: true,
+    // 水印默认关：内容是**当前用户的昵称**，铺满整屏对家长 / 商家是纯噪音
+    // （而且这个开关只存在内存里，刷新就回到默认值，开着也留不住）。
+    // 想临时看效果：系统设置 → 外观 → 水印。
+    show_watermark: false,
     side_mode: 'normal',
     // 页面过渡动画配置
     transition_type: 'slide',

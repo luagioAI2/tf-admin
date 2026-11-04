@@ -202,6 +202,36 @@ try {
   check(um.text.includes('App 用户请看'), '页面写清了 App 用户去「商城运营」看')
   await shot('brand-03-users')
 
+  // ---------- ⑤·6 运行状态 ----------
+  /* 原版是框架自带的诊断页，正文全英文（Runtime / cpu nums / Disk / MountPoint），
+     家长和商家点进来只会以为后台坏了。改成中文之后**必须有断言**，
+     否则下次谁把文件还原了也没人知道。 */
+  console.log('\n== 5·6 运行状态 ==')
+  check((shell.aside ?? '').includes('运行状态'), '侧边栏叫「运行状态」')
+  check(!(shell.aside ?? '').includes('服务器状态'), '侧边栏不再叫「服务器状态」')
+
+  // 走侧边栏点进去，不猜 URL —— 顶层菜单在 GVA 里到底挂 `/state` 还是
+  // `/layout/state` 随版本变，猜错就是「页面没打开」，而超时只说没打开。
+  await a.clickByText('运行状态')
+  // ⚠️ 别等「正文里出现『磁盘』」—— 页面顶部那句提示本身就写着「磁盘写满会…」，
+  //    等待条件立刻成立，读到的是接口还没回来时的空页（实测：卡片一张没有也「打开」了）。
+  //    判据只能是**卡头元素**的数量。
+  await a.waitFor(
+    () => document.querySelectorAll('.state-title').length >= 4,
+    '运行状态页打开（四张卡都渲染出来）',
+    { timeout: 30000 }
+  )
+  const st = await a.page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '))
+  const jargon = ['Runtime', 'cpu nums', 'MountPoint', 'goroutine nums', 'physical number of cores']
+  const left = jargon.filter((w) => st.includes(w))
+  check(left.length === 0, '运行状态页没有英文技术字段', left.join(' | '))
+  check(
+    ['服务运行', '磁盘', 'CPU', '内存'].every((w) => st.includes(w)),
+    '四张卡都在（服务运行 / 磁盘 / CPU / 内存）',
+    st.slice(0, 160)
+  )
+  await shot('brand-04-state')
+
   // ---------- ⑥ 干净程度 ----------
   console.log('\n== 6. 干净程度 ==')
   const errs = a.errors.filter((e) => e && !/favicon/i.test(e))
