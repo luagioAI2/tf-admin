@@ -161,7 +161,30 @@
         <div class="kv">
           <span class="k">uid</span><span class="mono">{{ detail.user.id }}</span>
           <span class="k">昵称</span><span>{{ detail.user.nickname || '—' }}</span>
-          <span class="k">手机号</span><span class="mono">{{ detail.user.mobile || '—' }}</span>
+          <!-- 账号类型：列表里那个「游客」小标签太容易被忽略，而这一屏是
+               「调余额 / 重置密码」之前必须看的地方 —— 游客没有手机号，
+               给他重置密码是无效操作（他下次启动还是按设备号自动进）。
+               `is_guest` / `mobile_verified` 服务端本来就在返回，以前只是没显示。 -->
+          <span class="k">账号类型</span>
+          <span>
+            <el-tag v-if="detail.user.is_guest" size="small" type="info">游客（临时账号）</el-tag>
+            <el-tag v-else size="small" type="success">正式账号</el-tag>
+            <span v-if="detail.user.is_guest" class="dim" style="margin-left: 8px">
+              没绑手机号，进度只在他那台设备上
+            </span>
+          </span>
+          <span class="k">手机号</span>
+          <span class="mono">
+            {{ detail.user.mobile || '—' }}
+            <el-tag
+              v-if="detail.user.mobile"
+              size="small"
+              :type="detail.user.mobile_verified ? 'success' : 'warning'"
+              style="margin-left: 6px"
+            >
+              {{ detail.user.mobile_verified ? '已验证' : '未验证' }}
+            </el-tag>
+          </span>
           <span class="k">语言</span><span>{{ detail.user.language || '—' }}</span>
           <span class="k">注册</span><span>{{ formatTs(detail.user.created_at) }}</span>
           <span class="k">最近登录</span><span>{{ formatTs(detail.user.last_login_at) }}</span>

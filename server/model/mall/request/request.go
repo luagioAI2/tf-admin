@@ -150,13 +150,103 @@ type WishItemSearch struct {
 	Archived *bool  `json:"archived" form:"archived"`
 }
 
-// UpdateWishItemReq 后台调整心愿商品（外链/上下架）
+// CreateWishItemReq 后台新建心愿商品。
+//
+// 以前新建一件商品只能去改客户端那份 `wishCatalog.ts` 再发一次版 ——
+// 运营加一个实物要等 App 更新。这张表本来就是**全站一份**的商品目录
+// （`wish_item`），后台补上「新增」才算真的可配置。
+type CreateWishItemReq struct {
+	// ItemID 业务 id（C 端 `WishItem.id` 用的就是它）。留空自动生成。
+	// 一旦生成就别再改 —— 心愿单、家长定价都按它关联。
+	ItemID string `json:"item_id"`
+	// Kind 商品类型：blindbox / gamebox / toy / book / other
+	Kind string `json:"kind" binding:"required"`
+	Name string `json:"name" binding:"required"`
+
+	Emoji       string `json:"emoji"`
+	Tint        string `json:"tint"`
+	PartnerName string `json:"partner_name"`
+	// GameID 游戏盒子指定的那一款（kind=gamebox 必填）
+	GameID string `json:"game_id"`
+	// Pool 盲盒池：候选游戏 id。**写全部游戏**是对的 ——
+	// 已拥有的那几款由 C 端在开奖时减掉（每个家庭不一样，不能写进常量）。
+	Pool       []string `json:"pool"`
+	PriceCents int64    `json:"price_cents"`
+	AgeRange   []int    `json:"age_range"`
+	Note       string   `json:"note"`
+	Notice     string   `json:"notice"`
+	// BuyURL 外链。只在家长确认页出现，孩子端读不到
+	BuyURL    string `json:"buy_url"`
+	BuyLabel  string `json:"buy_label"`
+	Archived  bool   `json:"archived"`
+	SortOrder int    `json:"sort_order"`
+	// UnlockCount 一次开出几款（盲盒用）。0 = 按 1 处理（单开）
+	UnlockCount int `json:"unlock_count"`
+}
+
+// UpdateWishItemReq 后台调整心愿商品。
+//
+// 全部字段都是**指针**：nil = 这次不动它。用值类型的话，
+// 界面上只想改排序，也会把没填的名字/须知一起清空。
 type UpdateWishItemReq struct {
-	ItemID    string  `json:"item_id" binding:"required"`
-	BuyURL    *string `json:"buy_url"`
-	BuyLabel  *string `json:"buy_label"`
-	Archived  *bool   `json:"archived"`
-	SortOrder *int    `json:"sort_order"`
+	ItemID string `json:"item_id" binding:"required"`
+
+	Kind        *string   `json:"kind"`
+	Name        *string   `json:"name"`
+	Emoji       *string   `json:"emoji"`
+	Tint        *string   `json:"tint"`
+	PartnerName *string   `json:"partner_name"`
+	GameID      *string   `json:"game_id"`
+	Pool        *[]string `json:"pool"`
+	PriceCents  *int64    `json:"price_cents"`
+	AgeRange    *[]int    `json:"age_range"`
+	Note        *string   `json:"note"`
+	Notice      *string   `json:"notice"`
+	BuyURL      *string   `json:"buy_url"`
+	BuyLabel    *string   `json:"buy_label"`
+	Archived    *bool     `json:"archived"`
+	SortOrder   *int      `json:"sort_order"`
+	// UnlockCount 一次开出几款（盲盒用）。nil = 不动
+	UnlockCount *int `json:"unlock_count"`
+}
+
+// DeleteWishItemReq 删除心愿商品（只允许删「没人换过」的）
+type DeleteWishItemReq struct {
+	ItemID string `json:"item_id" binding:"required"`
+}
+
+// ============================ 激活码 ============================
+
+// WishCodeSearch 激活码查询
+type WishCodeSearch struct {
+	request.PageInfo
+	ItemID string `json:"item_id" form:"item_id"`
+	Batch  string `json:"batch" form:"batch"`
+	// Used nil = 不筛；true/false 都要能用（`0` 是有效值，见 IsGuest 那条注释）
+	Used *bool `json:"used" form:"used"`
+}
+
+// GenerateWishCodeReq 批量生成激活码
+type GenerateWishCodeReq struct {
+	// ItemID 这批码解锁哪件商品。**必须是 gamebox 类的商品** ——
+	// 其它类型没有 `game_id`，核销时解锁不出任何东西。
+	ItemID string `json:"item_id" binding:"required"`
+	// Count 生成多少个。上限 500：一次印几千张不现实，而且明文只返回一次，
+	// 前端复制不了那么多。
+	Count int `json:"count" binding:"required"`
+	// Batch 批次号（运营自己起名，便于「按批作废」）
+	Batch string `json:"batch"`
+	// ExpireDays 多少天后过期。0 = 永不过期
+	ExpireDays int `json:"expire_days"`
+}
+
+// VoidWishCodeReq 作废激活码。
+//
+// 两种粒度：给 `id` 作废单张；给 `batch` 作废整批里**还没用过**的。
+// 已经用掉的不动 —— 那个孩子的游戏已经到账了，作废码不能回收游戏。
+type VoidWishCodeReq struct {
+	ID    uint   `json:"id"`
+	Batch string `json:"batch"`
 }
 
 // WishOrderSearch 心愿单查询

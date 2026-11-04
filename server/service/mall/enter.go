@@ -25,6 +25,7 @@ type ServiceGroup struct {
 	PlatformUserService
 	RedeemService
 	WishService
+	WishCodeService
 	TaskService
 	DashboardService
 	MerchantService

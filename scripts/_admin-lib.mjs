@@ -272,22 +272,35 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
    *   （分类 / 状态），按 placeholder 找会点到隔壁那个。
    * ★ 也必须限定「可见」：Element Plus 的 `el-tab-pane` 用 v-show，
    *   隐藏页签里的表单项照样在 DOM 里。
+   *
+   * ★★ 弹窗打开时**必须传 `scope='dialog'`**。`offsetParent !== null`
+   *   挡不住弹窗下面的东西：弹窗是 `position: fixed` 的遮罩，底下那一屏
+   *   仍然「可见」。同一个 label 两处都有时（心愿商城页：筛选栏有个「商品」，
+   *   生成激活码弹窗里也有个「商品」），按 DOM 顺序会命中**筛选项**，
+   *   鼠标点在遮罩上 ⇒ 什么都不展开 ⇒ 读出来「下拉 0 项」，
+   *   看着像「下拉是空的 / 数据没加载」。
    */
-  const openSelectByLabel = async (label) => {
-    const hit = await page.evaluate((t) => {
-      const items = [...document.querySelectorAll('.el-form-item')].filter(
-        (el) => el.offsetParent !== null
-      )
-      const it = items.find((el) => {
-        const l = (el.querySelector('.el-form-item__label')?.innerText || '').trim()
-        return l.replace(/[:：]\s*$/, '') === t
-      })
-      if (!it) return null
-      const box = it.querySelector('.el-select__wrapper') ?? it.querySelector('input')
-      if (!box) return null
-      const r = box.getBoundingClientRect()
-      return { cx: Math.round(r.x + r.width / 2), cy: Math.round(r.y + r.height / 2) }
-    }, label)
+  const openSelectByLabel = async (label, scope = 'body') => {
+    const hit = await page.evaluate(
+      (t, sc) => {
+        const root =
+          sc === 'dialog' ? document.querySelector('.el-dialog') ?? document.body : document.body
+        const items = [...root.querySelectorAll('.el-form-item')].filter(
+          (el) => el.offsetParent !== null
+        )
+        const it = items.find((el) => {
+          const l = (el.querySelector('.el-form-item__label')?.innerText || '').trim()
+          return l.replace(/[:：]\s*$/, '') === t
+        })
+        if (!it) return null
+        const box = it.querySelector('.el-select__wrapper') ?? it.querySelector('input')
+        if (!box) return null
+        const r = box.getBoundingClientRect()
+        return { cx: Math.round(r.x + r.width / 2), cy: Math.round(r.y + r.height / 2) }
+      },
+      label,
+      scope
+    )
     if (!hit) throw new Error(`找不到「${label}」这个下拉框`)
     await page.mouse.click(hit.cx, hit.cy)
     await new Promise((r) => setTimeout(r, 400))

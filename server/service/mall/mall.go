@@ -2,6 +2,9 @@ package mall
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -119,13 +122,48 @@ func (s *WishService) ItemList(ctx context.Context, info request.WishItemSearch)
 	return
 }
 
-// UpdateItem 调整心愿商品（改外链 / 上下架）
+// UpdateItem 调整心愿商品。
 //
 // ⚠️ `buy_url` 只在**家长端**出现。后台可以改它，
 // 但**不要**把它当成「孩子能看到的推广位」——
 // C 端接口对孩子的响应里根本不返回这个字段。
+//
+// 全字段都是指针语义：nil = 这次不动它。见 `UpdateWishItemReq` 的注释。
 func (s *WishService) UpdateItem(ctx context.Context, req request.UpdateWishItemReq) error {
 	fields := map[string]interface{}{}
+	if req.Kind != nil {
+		fields["kind"] = *req.Kind
+	}
+	if req.Name != nil {
+		fields["name"] = *req.Name
+	}
+	if req.Emoji != nil {
+		fields["emoji"] = *req.Emoji
+	}
+	if req.Tint != nil {
+		fields["tint"] = *req.Tint
+	}
+	if req.PartnerName != nil {
+		fields["partner_name"] = *req.PartnerName
+	}
+	if req.GameID != nil {
+		fields["game_id"] = *req.GameID
+	}
+	if req.Pool != nil {
+		fields["pool"] = jsonArray(*req.Pool)
+	}
+	if req.PriceCents != nil {
+		fields["price_cents"] = *req.PriceCents
+	}
+	if req.AgeRange != nil {
+		fields["age_range"] = jsonArray(*req.AgeRange)
+	}
+	if req.Note != nil {
+		fields["note"] = *req.Note
+	}
+	if req.Notice != nil {
+		fields["notice"] = *req.Notice
+	}
 	if req.BuyURL != nil {
 		fields["buy_url"] = *req.BuyURL
 	}
@@ -138,12 +176,121 @@ func (s *WishService) UpdateItem(ctx context.Context, req request.UpdateWishItem
 	if req.SortOrder != nil {
 		fields["sort_order"] = *req.SortOrder
 	}
+	if req.UnlockCount != nil {
+		// 0 会被当成「没填」而静默变成单开 —— 那正是「5 连开卖成了单开」。
+		if *req.UnlockCount < 1 {
+			return fmt.Errorf("「一次开出几款」至少是 1")
+		}
+		fields["unlock_count"] = *req.UnlockCount
+	}
 	if len(fields) == 0 {
 		return nil
 	}
 	fields["updated_at"] = nowUnix()
 	return global.GVA_DB.WithContext(ctx).Model(&mall.WishItem{}).
 		Where("item_id = ?", req.ItemID).Updates(fields).Error
+}
+
+// jsonArray 把数组写成表里那种 JSON 文本（空数组写成 `[]`，不是空串）。
+//
+// 为什么不是空串：C 端读 `pool` 时是 `JSON.parse`，空串会抛，
+// 而抛在开奖那一步的表现是「盲盒点了没反应」。
+func jsonArray[T any](v []T) string {
+	if v == nil {
+		v = []T{}
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+// CreateItem 新建心愿商品。
+//
+// ## 为什么 item_id 让后台自己给（留空才自动生成）
+//
+// 它同时是 C 端 `WishItem.id`、家长定价 (`wish_offer.item_id`) 和
+// 激活码 (`wish_code.item_id`) 的关联键。自动生成的 id 一旦印在卡片上
+// 就没法改了，所以「运营能自己起个好认的名字」比「省一个输入框」重要。
+func (s *WishService) CreateItem(ctx context.Context, req request.CreateWishItemReq) (string, error) {
+	kind := strings.TrimSpace(req.Kind)
+	name := strings.TrimSpace(req.Name)
+	if kind == "" || name == "" {
+		return "", fmt.Errorf("分类和名字不能为空")
+	}
+	// 这两条是「建出来就是坏商品」的组合，建的时候就拦住 ——
+	// 建完再让孩子点，症状是「盲盒里什么都没有」/「这款游戏没配好」。
+	if kind == "gamebox" && strings.TrimSpace(req.GameID) == "" {
+		return "", fmt.Errorf("「单款游戏」必须指定是哪一款")
+	}
+	if kind == "blindbox" && len(req.Pool) == 0 {
+		return "", fmt.Errorf("盲盒必须至少有一个候选游戏")
+	}
+	// 「开 0 款」等于卖了个空盒子：券扣了、什么都没给
+	unlock := req.UnlockCount
+	if unlock < 1 {
+		unlock = 1
+	}
+
+	itemID := strings.TrimSpace(req.ItemID)
+	if itemID == "" {
+		// 时间戳 base36：短、单调、不会和手写的撞
+		itemID = "wi" + strconv.FormatInt(time.Now().UnixNano()/1e6, 36)
+	}
+	var dup int64
+	if err := global.GVA_DB.WithContext(ctx).Model(&mall.WishItem{}).
+		Where("item_id = ?", itemID).Count(&dup).Error; err != nil {
+		return "", err
+	}
+	if dup > 0 {
+		return "", fmt.Errorf("这个商品 id 已经有了：%s", itemID)
+	}
+
+	now := nowUnix()
+	row := &mall.WishItem{
+		BaseModel:   mall.BaseModel{CreatedAt: now, UpdatedAt: now},
+		ItemID:      itemID,
+		Kind:        kind,
+		Name:        name,
+		Emoji:       req.Emoji,
+		Tint:        req.Tint,
+		PartnerName: req.PartnerName,
+		GameID:      req.GameID,
+		Pool:        jsonArray(req.Pool),
+		PriceCents:  req.PriceCents,
+		AgeRange:    jsonArray(req.AgeRange),
+		Note:        req.Note,
+		Notice:      req.Notice,
+		BuyURL:      req.BuyURL,
+		BuyLabel:    req.BuyLabel,
+		Archived:    req.Archived,
+		SortOrder:   req.SortOrder,
+		UnlockCount: unlock,
+	}
+	if err := global.GVA_DB.WithContext(ctx).Create(row).Error; err != nil {
+		return "", err
+	}
+	return itemID, nil
+}
+
+// DeleteItem 删除心愿商品。
+//
+// ★ 只允许删「一次都没被换过」的商品。
+// 换过就说明孩子的心愿单里指着它（`wish_order.item_id`），
+// 删了那条历史就变成「商品已不存在」—— 而孩子当时确实付了券。
+// 这种要「不再卖」就下架（`archived`），不是删。
+func (s *WishService) DeleteItem(ctx context.Context, itemID string) error {
+	var used int64
+	if err := global.GVA_DB.WithContext(ctx).Model(&mall.WishOrder{}).
+		Where("item_id = ?", itemID).Count(&used).Error; err != nil {
+		return err
+	}
+	if used > 0 {
+		return fmt.Errorf("这个商品已经被兑换过 %d 次，不能删；不想卖了请「下架」", used)
+	}
+	return global.GVA_DB.WithContext(ctx).Model(&mall.WishItem{}).
+		Where("item_id = ?", itemID).Delete(&mall.WishItem{}).Error
 }
 
 // OrderList 心愿单列表

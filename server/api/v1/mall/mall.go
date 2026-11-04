@@ -442,6 +442,47 @@ func (a *WishApi) ItemUpdate(c *gin.Context) {
 	response.OkWithMessage("调整成功", c)
 }
 
+// ItemCreate 新建心愿商品
+// @Tags     MallWish
+// @Summary  新建心愿商品
+// @Produce  application/json
+// @Param    data  body      mallReq.CreateWishItemReq  true  "商品"
+// @Success  200   {object}  response.Response{}        "新建结果"
+// @Router   /mall/wish/item/create [post]
+func (a *WishApi) ItemCreate(c *gin.Context) {
+	var req mallReq.CreateWishItemReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.FailWithMessage(err.Error(), c)
+		return
+	}
+	itemID, err := wishService.CreateItem(c.Request.Context(), req)
+	if err != nil {
+		response.FailWithMessage("新建失败："+err.Error(), c)
+		return
+	}
+	response.OkWithDetailed(gin.H{"item_id": itemID}, "新建成功", c)
+}
+
+// ItemDelete 删除心愿商品（只允许删没被兑换过的）
+// @Tags     MallWish
+// @Summary  删除心愿商品
+// @Produce  application/json
+// @Param    data  body      mallReq.DeleteWishItemReq  true  "商品 id"
+// @Success  200   {object}  response.Response{}        "删除结果"
+// @Router   /mall/wish/item/delete [post]
+func (a *WishApi) ItemDelete(c *gin.Context) {
+	var req mallReq.DeleteWishItemReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.FailWithMessage(err.Error(), c)
+		return
+	}
+	if err := wishService.DeleteItem(c.Request.Context(), req.ItemID); err != nil {
+		response.FailWithMessage("删除失败："+err.Error(), c)
+		return
+	}
+	response.OkWithMessage("删除成功", c)
+}
+
 // OrderList 心愿单列表
 // @Tags     MallWish
 // @Summary  心愿单列表

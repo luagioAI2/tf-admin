@@ -4,9 +4,9 @@
       <template #title>
         心愿商品是<b>全站一份</b>（不像兑换商品那样每个孩子一份），
         所以这里没有「所属」，看到的就是所有人共享的那份清单。
-        后台只能改 <b>外链 / 外链文字 / 上下架 / 排序</b>；
-        新建商品和「改订单状态」是孩子和家长在 App 里做的事，这里没有入口
-        —— 能改状态就等于能凭空扣券、退券。
+        商品本身在这里<b>增 / 改 / 删 / 上下架</b>都能做；
+        但<b>订单状态</b>不在这里改 —— 它是孩子和家长在 App 里推的
+        （想要 → 兑换 → 家长下单 → 收到货），后台能改状态就等于能凭空扣券、退券。
       </template>
     </el-alert>
 
@@ -40,7 +40,8 @@
 
         <div class="gva-table-box">
           <div class="gva-btn-list">
-            <span class="dim">共 {{ itemTotal }} 个商品</span>
+            <el-button type="primary" icon="plus" @click="openCreate">新增商品</el-button>
+            <span class="dim" style="margin-left: 12px">共 {{ itemTotal }} 个商品</span>
           </div>
           <el-table :data="items" style="width: 100%" row-key="item_id">
             <el-table-column align="left" label="商品" min-width="220">
@@ -101,9 +102,10 @@
             <el-table-column align="left" label="更新于" width="160">
               <template #default="scope">{{ formatTs(scope.row.updated_at) }}</template>
             </el-table-column>
-            <el-table-column align="left" label="操作" width="110" fixed="right">
+            <el-table-column align="left" label="操作" width="150" fixed="right">
               <template #default="scope">
-                <el-button type="primary" link @click="openEdit(scope.row)">改外链</el-button>
+                <el-button type="primary" link @click="openEdit(scope.row)">编辑</el-button>
+                <el-button type="danger" link @click="onDelete(scope.row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -216,13 +218,244 @@
           </div>
         </div>
       </el-tab-pane>
+
+      <!-- ==================== ③ 激活码 ==================== -->
+      <el-tab-pane label="激活码" name="code">
+        <el-alert type="warning" :closable="false" show-icon class="tip">
+          <template #title>
+            一张卡 = 一个 6 位码。孩子把码敲进 App，那款游戏就进他的游戏库。
+            <b>明文只在「生成」那一瞬间给你一次</b> —— 表里只存 sha256，
+            关掉弹窗就再也拿不回来（只能作废重发）。生成完请<b>当场复制</b>去印卡片。
+          </template>
+        </el-alert>
+
+        <div class="gva-search-box">
+          <el-form :inline="true" :model="codeSearch">
+            <el-form-item label="商品">
+              <el-select
+                v-model="codeSearch.item_id"
+                placeholder="全部"
+                clearable
+                filterable
+                style="width: 230px"
+              >
+                <el-option
+                  v-for="it in codeItems"
+                  :key="it.item_id"
+                  :label="`${it.emoji || '🎁'} ${it.name}`"
+                  :value="it.item_id"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="批次">
+              <el-select
+                v-model="codeSearch.batch"
+                placeholder="全部"
+                clearable
+                filterable
+                style="width: 180px"
+              >
+                <el-option v-for="b in batches" :key="b" :label="b" :value="b" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="状态">
+              <el-select v-model="codeSearch.used" placeholder="全部" clearable style="width: 120px">
+                <el-option label="未使用" :value="false" />
+                <el-option label="已使用" :value="true" />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" icon="search" @click="onCodeSearch">查询</el-button>
+              <el-button icon="refresh" @click="onCodeReset">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </div>
+
+        <div class="gva-table-box">
+          <div class="gva-btn-list">
+            <el-button type="primary" icon="plus" @click="openGenerate">生成激活码</el-button>
+            <!-- 整批作废要先按批次筛选：不筛就等于「作废全部未使用的码」 -->
+            <el-button type="danger" plain :disabled="!codeSearch.batch" @click="onVoidBatch">
+              作废整批{{ codeSearch.batch ? `（${codeSearch.batch}）` : '' }}
+            </el-button>
+            <span class="dim" style="margin-left: 12px">共 {{ codeTotal }} 个码</span>
+          </div>
+          <el-table :data="codes" style="width: 100%" row-key="id">
+            <el-table-column align="left" label="批次" width="150">
+              <template #default="scope">
+                <span class="mono">{{ scope.row.batch || '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column align="left" label="商品" min-width="190">
+              <template #default="scope">
+                <span class="emoji">{{ itemById[scope.row.item_id]?.emoji || '🎁' }}</span>
+                <span class="name">{{ itemById[scope.row.item_id]?.name || scope.row.item_id }}</span>
+                <div v-if="itemById[scope.row.item_id]?.game_id" class="note faint mono">
+                  → {{ itemById[scope.row.item_id].game_id }}
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column align="left" label="码尾" width="110">
+              <template #default="scope">
+                <!-- ★ 表里没有明文，只有后 4 位。家长拿卡来问「是不是这张」就看它 -->
+                <span class="mono">····{{ scope.row.code_tail }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column align="left" label="状态" width="100">
+              <template #default="scope">
+                <el-tag :type="codeTagType(scope.row)" size="small">
+                  {{ codeStateText(scope.row) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column align="left" label="谁用的" width="130">
+              <template #default="scope">
+                <span v-if="scope.row.used">{{ userName(scope.row.used_by_uid) }}</span>
+                <span v-else class="dim">—</span>
+              </template>
+            </el-table-column>
+            <el-table-column align="left" label="用掉时间" width="160">
+              <template #default="scope">{{ formatTs(scope.row.used_at) }}</template>
+            </el-table-column>
+            <el-table-column align="left" label="生成时间" width="160">
+              <template #default="scope">{{ formatTs(scope.row.created_at) }}</template>
+            </el-table-column>
+            <el-table-column align="left" label="操作" width="90" fixed="right">
+              <template #default="scope">
+                <el-button v-if="!scope.row.used" type="danger" link @click="onVoidOne(scope.row)">
+                  作废
+                </el-button>
+                <span v-else class="dim">—</span>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="gva-pagination">
+            <el-pagination
+              :current-page="codePage"
+              :page-size="codePageSize"
+              :page-sizes="[20, 50, 100, 200]"
+              :total="codeTotal"
+              layout="total, sizes, prev, pager, next, jumper"
+              @current-change="onCodePage"
+              @size-change="onCodeSize"
+            />
+          </div>
+        </div>
+      </el-tab-pane>
     </el-tabs>
 
-    <!-- ==================== 改外链 / 上下架 ==================== -->
-    <el-dialog v-model="editVisible" title="调整心愿商品" width="520px" destroy-on-close>
-      <el-form :model="editForm" label-width="100px">
-        <el-form-item label="商品">
-          <span>{{ editForm.emoji }} {{ editForm.name }}</span>
+    <!-- ==================== 新建 / 编辑商品 ==================== -->
+    <el-dialog
+      v-model="editVisible"
+      :title="isCreate ? '新增心愿商品' : '编辑心愿商品'"
+      width="640px"
+      destroy-on-close
+    >
+      <el-form :model="editForm" label-width="110px">
+        <el-form-item label="分类" required>
+          <el-select v-model="editForm.kind" style="width: 200px">
+            <el-option v-for="(m, k) in KIND_META" :key="k" :label="m.label" :value="k" />
+          </el-select>
+          <div class="hint">
+            「盲盒」和「单款游戏」是<b>数字商品</b>：兑换后直接进孩子的游戏库。
+            其余是实物，走家长去外链买那条路。
+          </div>
+        </el-form-item>
+        <el-form-item label="名字" required>
+          <el-input v-model="editForm.name" placeholder="游戏盲盒 · 5 连开" clearable />
+        </el-form-item>
+        <el-form-item label="商品 id">
+          <el-input
+            v-model="editForm.item_id"
+            :disabled="!isCreate"
+            placeholder="留空自动生成"
+            clearable
+          />
+          <div class="hint">
+            C 端、家长定价、激活码都按它关联。
+            <b>建好之后不要再改</b>（改了等于换了一件商品），所以编辑时是锁住的。
+          </div>
+        </el-form-item>
+        <el-form-item label="图标">
+          <el-input v-model="editForm.emoji" placeholder="🎁" clearable style="width: 90px" />
+          <el-select v-model="editForm.tint" placeholder="底色" style="width: 130px; margin-left: 10px">
+            <el-option v-for="t in TINTS" :key="t.value" :label="t.label" :value="t.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="editForm.kind === 'gamebox'" label="哪一款游戏" required>
+          <el-select v-model="editForm.game_id" filterable style="width: 320px">
+            <el-option
+              v-for="g in gameOptions"
+              :key="g.game_id"
+              :label="`${g.emoji || '🎮'} ${g.name || g.game_id}`"
+              :value="g.game_id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="editForm.kind === 'blindbox'" label="盲盒池" required>
+          <el-select
+            v-model="editForm.pool"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="选中所有可以开出来的游戏"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="g in gameOptions"
+              :key="g.game_id"
+              :label="`${g.emoji || '🎮'} ${g.name || g.game_id}`"
+              :value="g.game_id"
+            />
+          </el-select>
+          <div class="hint">
+            池子里写<b>全部</b>游戏是对的 —— 孩子已经有的那几款，
+            开奖时会自动减掉，不会开出重复的。
+          </div>
+        </el-form-item>
+        <el-form-item v-if="editForm.kind === 'blindbox'" label="一次开出几款">
+          <el-input-number v-model="editForm.unlockCount" :min="1" :max="20" :step="1" />
+          <span class="dim" style="margin-left: 8px">款</span>
+          <div class="hint">
+            1 = 单开盲盒；5 = 「5 连开」。<b>已拥有的不占名额</b> ——
+            开奖时先减掉孩子已有的，再从剩下的里抽这么多款。
+            剩余不足这个数时孩子那边换不了（不会「有几款给几款」）。
+          </div>
+        </el-form-item>
+        <el-form-item label="合作方">
+          <el-input v-model="editForm.partner_name" placeholder="泡泡玛特（实物才填）" clearable />
+        </el-form-item>
+        <el-form-item label="参考价">
+          <el-input-number
+            v-model="editForm.priceYuan"
+            :min="0"
+            :max="99999"
+            :step="1"
+            :precision="2"
+          />
+          <span class="dim" style="margin-left: 8px">元</span>
+          <div class="hint">
+            只是给家长看的<b>参考价</b>，不参与任何计算。
+            真正扣多少券在家长自己那一屏定。
+          </div>
+        </el-form-item>
+        <el-form-item label="适龄">
+          <el-input-number v-model="editForm.ageMin" :min="0" :max="18" :step="1" />
+          <span class="dim" style="margin: 0 8px">到</span>
+          <el-input-number v-model="editForm.ageMax" :min="0" :max="18" :step="1" />
+          <span class="dim" style="margin-left: 8px">岁（都不填 = 不显示）</span>
+        </el-form-item>
+        <el-form-item label="一句话说明">
+          <el-input v-model="editForm.note" placeholder="随机开出一款你没玩过的游戏" clearable />
+        </el-form-item>
+        <el-form-item label="兑换须知">
+          <el-input
+            v-model="editForm.notice"
+            type="textarea"
+            :rows="2"
+            placeholder="不指定款式 / 兑换后不退"
+          />
         </el-form-item>
         <el-form-item label="外链">
           <el-input
@@ -240,7 +473,7 @@
         </el-form-item>
         <el-form-item label="排序">
           <el-input-number v-model="editForm.sort_order" :min="0" :max="9999" :step="1" />
-          <div class="hint">数字越小越靠前。</div>
+          <div class="hint">数字越小越靠前。盲盒永远排在最前，不受这个影响。</div>
         </el-form-item>
         <el-form-item label="状态">
           <el-switch
@@ -255,16 +488,99 @@
       </el-form>
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitEdit">保存</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitEdit">
+          {{ isCreate ? '新建' : '保存' }}
+        </el-button>
+      </template>
+    </el-dialog>
+    <!-- ==================== 生成激活码 ==================== -->
+    <el-dialog v-model="genVisible" title="生成激活码" width="540px" destroy-on-close>
+      <el-form :model="genForm" label-width="100px">
+        <el-form-item label="商品" required>
+          <el-select
+            v-model="genForm.item_id"
+            filterable
+            style="width: 100%"
+            placeholder="只能选「游戏」分类的商品"
+          >
+            <el-option
+              v-for="it in codeItems"
+              :key="it.item_id"
+              :label="`${it.emoji || '🎁'} ${it.name}`"
+              :value="it.item_id"
+            />
+          </el-select>
+          <div class="hint">
+            码只解锁<b>一款具体游戏</b>，所以只能挂在「游戏」分类的商品上。
+            挂在实物或盲盒上，核销会「成功」但游戏进不了库 —— 那张卡就白卖了。
+            下拉里没有想卖的那款？先去「心愿商品」建一个分类为「游戏」的商品。
+          </div>
+        </el-form-item>
+        <el-form-item label="数量" required>
+          <el-input-number v-model="genForm.count" :min="1" :max="500" :step="10" />
+          <span class="dim" style="margin-left: 8px">个（一次最多 500）</span>
+        </el-form-item>
+        <el-form-item label="批次号">
+          <el-input v-model="genForm.batch" placeholder="留空自动（B20261103-1244）" clearable />
+          <div class="hint">印卡片时按批次发；以后要「作废整批」就靠它。</div>
+        </el-form-item>
+        <el-form-item label="有效期">
+          <el-input-number v-model="genForm.expireDays" :min="0" :max="3650" :step="30" />
+          <span class="dim" style="margin-left: 8px">天（0 = 永不过期）</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="genVisible = false">取消</el-button>
+        <el-button type="primary" :loading="genLoading" @click="submitGenerate">生成</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ==================== 生成结果：明文只此一次 ==================== -->
+    <el-dialog
+      v-model="resultVisible"
+      title="激活码已生成 —— 请现在复制走"
+      width="560px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :before-close="onResultClose"
+    >
+      <el-alert type="warning" :closable="false" show-icon>
+        <template #title>
+          表里<b>只存哈希</b>。这 {{ resultCodes.length }} 个码关掉这个窗口就
+          <b>永远拿不回来</b>（只能作废重发）。请先「复制全部」。
+        </template>
+      </el-alert>
+      <div class="codebox mono">
+        <div v-for="(c, i) in resultCodes" :key="c" class="codeline">
+          <span class="idx">{{ i + 1 }}</span>
+          <span>{{ c }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="copyCodes">{{ copied ? '已复制 ✓' : '复制全部' }}</el-button>
+        <el-button type="primary" @click="closeResult">我已复制</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-  import { onMounted, ref } from 'vue'
-  import { ElMessage } from 'element-plus'
-  import { getWishItemList, getWishOrderList, updateWishItem } from '@/api/mallWish'
+  import { computed, onMounted, ref } from 'vue'
+  import { ElMessage, ElMessageBox } from 'element-plus'
+  import {
+    createWishItem,
+    deleteWishItem,
+    getWishItemList,
+    getWishOrderList,
+    updateWishItem
+  } from '@/api/mallWish'
+  import { getGameOptions } from '@/api/mallGame'
+  import {
+    generateWishCodes,
+    getWishCodeBatches,
+    getWishCodeList,
+    voidWishCodes
+  } from '@/api/mallWishCode'
   import { getPlatformUserList } from '@/api/tfUser'
   import { formatDate } from '@/utils/format'
 
@@ -402,27 +718,92 @@
     getOrders()
   }
 
-  /* ---------- 改外链 / 上下架 ---------- */
+  /* ---------- 新建 / 编辑 / 删除商品 ---------- */
   const editVisible = ref(false)
   const submitting = ref(false)
-  const editForm = ref({
+  /** true = 这次是「新增」。同一个弹窗两用，靠它切标题、切 item_id 是否可改 */
+  const isCreate = ref(false)
+  const gameOptions = ref([])
+  /** 图标底色档位，和 App 里 `WishTint` 的取值一一对应 */
+  const TINTS = [
+    { value: 'sun', label: '暖黄' },
+    { value: 'grass', label: '草绿' },
+    { value: 'sky', label: '天蓝' },
+    { value: 'grape', label: '葡萄紫' },
+    { value: 'tan', label: '沙色' },
+    { value: 'berry', label: '莓红' }
+  ]
+
+  const blankForm = () => ({
     item_id: '',
+    kind: 'blindbox',
     name: '',
-    emoji: '',
+    emoji: '🎁',
+    tint: 'sun',
+    partner_name: '',
+    game_id: '',
+    pool: [],
+    /** 盲盒一次开几款。1 = 单开（老口径），5 = 5 连开 */
+    unlockCount: 1,
+    /** 元。提交时 ×100 成 `price_cents` —— 界面上写「69 元」比「6900 分」好核对 */
+    priceYuan: 0,
+    ageMin: 0,
+    ageMax: 0,
+    note: '',
+    notice: '',
     buy_url: '',
     buy_label: '',
-    sort_order: 0,
+    sort_order: 100,
     archived: false
   })
+  const editForm = ref(blankForm())
+
+  /** `[6,12]` 这种 JSON 文本 → 两个数字。坏数据当「没填」，别让编辑框炸掉 */
+  const parseAge = (raw) => {
+    try {
+      const v = JSON.parse(raw || '[]')
+      if (!Array.isArray(v)) return [0, 0]
+      return [Number(v[0]) || 0, Number(v[1]) || 0]
+    } catch {
+      return [0, 0]
+    }
+  }
+  const parsePool = (raw) => {
+    try {
+      const v = JSON.parse(raw || '[]')
+      return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []
+    } catch {
+      return []
+    }
+  }
+
+  const openCreate = () => {
+    isCreate.value = true
+    editForm.value = blankForm()
+    editVisible.value = true
+  }
 
   const openEdit = (row) => {
+    isCreate.value = false
+    const [ageMin, ageMax] = parseAge(row.age_range)
     editForm.value = {
       item_id: row.item_id,
-      name: row.name,
-      emoji: row.emoji,
-      buy_url: row.buy_url ?? '',
-      buy_label: row.buy_label ?? '',
-      sort_order: row.sort_order ?? 0,
+      kind: row.kind || 'blindbox',
+      name: row.name || '',
+      emoji: row.emoji || '',
+      tint: row.tint || 'sun',
+      partner_name: row.partner_name || '',
+      game_id: row.game_id || '',
+      pool: parsePool(row.pool),
+      unlockCount: row.unlock_count || 1,
+      priceYuan: (row.price_cents || 0) / 100,
+      ageMin,
+      ageMax,
+      note: row.note || '',
+      notice: row.notice || '',
+      buy_url: row.buy_url || '',
+      buy_label: row.buy_label || '',
+      sort_order: row.sort_order ?? 100,
       archived: !!row.archived
     }
     editVisible.value = true
@@ -430,6 +811,20 @@
 
   const submitEdit = async () => {
     const f = editForm.value
+    const name = (f.name ?? '').trim()
+    if (!name) {
+      ElMessage.error('名字不能为空')
+      return
+    }
+    /* 这两条后端也拦，但在这里先说 —— 用户填了半天才知道不行 */
+    if (f.kind === 'gamebox' && !f.game_id) {
+      ElMessage.error('「单款游戏」必须选一款')
+      return
+    }
+    if (f.kind === 'blindbox' && f.pool.length === 0) {
+      ElMessage.error('盲盒至少要选一款候选游戏')
+      return
+    }
     /* 前端先挡一下明显不对的链接：后端只做非空校验，
        写进 `javascript:...` 会原样出现在家长确认页的 href 上。 */
     const url = (f.buy_url ?? '').trim()
@@ -437,17 +832,39 @@
       ElMessage.error('外链必须以 http:// 或 https:// 开头')
       return
     }
+
+    /* 适龄：两个都没填就不传 —— 传 `[0,0]` 会被当成「0~0 岁」显示出来 */
+    const age = f.ageMin || f.ageMax ? [f.ageMin || 0, f.ageMax || 0] : []
+    const common = {
+      kind: f.kind,
+      name,
+      emoji: (f.emoji ?? '').trim(),
+      tint: f.tint,
+      partner_name: (f.partner_name ?? '').trim(),
+      /* 分类换了就把用不上的那个字段清掉，否则「盲盒改成游戏」之后
+         池子还留在表里，C 端按 kind 读不到、看着像数据错了 */
+      game_id: f.kind === 'gamebox' ? f.game_id : '',
+      pool: f.kind === 'blindbox' ? f.pool : [],
+      /* 非盲盒一律回到 1：不然「盲盒改成游戏」之后 unlock_count 还留着 5，
+         C 端不读它，但后台列表和历史数据会看着像配错了 */
+      unlock_count: f.kind === 'blindbox' ? Math.max(1, f.unlockCount || 1) : 1,
+      price_cents: Math.round((f.priceYuan || 0) * 100),
+      age_range: age,
+      note: (f.note ?? '').trim(),
+      notice: (f.notice ?? '').trim(),
+      buy_url: url,
+      buy_label: (f.buy_label ?? '').trim(),
+      sort_order: f.sort_order,
+      archived: f.archived
+    }
+
     submitting.value = true
     try {
-      const res = await updateWishItem({
-        item_id: f.item_id,
-        buy_url: url,
-        buy_label: (f.buy_label ?? '').trim(),
-        sort_order: f.sort_order,
-        archived: f.archived
-      })
+      const res = isCreate.value
+        ? await createWishItem({ ...common, item_id: (f.item_id ?? '').trim() })
+        : await updateWishItem({ ...common, item_id: f.item_id })
       if (res.code === 0) {
-        ElMessage.success('已保存')
+        ElMessage.success(isCreate.value ? '已新建' : '已保存')
         editVisible.value = false
         getItems()
       }
@@ -457,9 +874,262 @@
     }
   }
 
+  /* ★ 删除只对「一次都没被换过」的商品有效。
+     换过的会被后端挡住 —— 那些订单的历史要能解释（孩子当时确实付了券）。
+     所以这里先问一句，并把「只想不卖」的替代方案写在提示里。 */
+  const onDelete = async (row) => {
+    try {
+      await ElMessageBox.confirm(
+        `确定删除「${row.name}」吗？\n\n只删商品本身，不退款、不影响已有订单。\n已经被人兑换过的商品删不掉 —— 那种请用「编辑 → 下架」。`,
+        '删除商品',
+        { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
+      )
+    } catch {
+      return /* 用户点了取消 */
+    }
+    const res = await deleteWishItem({ item_id: row.item_id })
+    if (res.code === 0) {
+      ElMessage.success('已删除')
+      getItems()
+    }
+  }
+
+  /* ---------- 激活码 ---------- */
+  const codes = ref([])
+  const codeTotal = ref(0)
+  const codePage = ref(1)
+  const codePageSize = ref(20)
+  const codeSearch = ref({ item_id: '', batch: '', used: '' })
+  const batches = ref([])
+
+  /* ★ 商品下拉必须用**全量**清单，不能用 `items` ——
+     那个是当前页（默认 10 条）。用它做下拉会「明明有这件商品却选不到」，
+     而且换一页下拉内容就变，像随机坏掉。 */
+  const allItems = ref([])
+  const itemById = computed(() =>
+    Object.fromEntries(allItems.value.map((it) => [it.item_id, it]))
+  )
+  /* 能挂码的只有「游戏」分类且绑了 game_id 的 ——
+     后端 GenerateCodes 也会拦，这里先过滤省得白填一遍。 */
+  const codeItems = computed(() =>
+    allItems.value.filter((it) => it.kind === 'gamebox' && !!it.game_id)
+  )
+
+  const loadAllItems = async () => {
+    const res = await getWishItemList({ page: 1, pageSize: 200 })
+    if (res.code === 0) allItems.value = res.data.list ?? []
+  }
+
+  const getCodes = async () => {
+    const data = { page: codePage.value, pageSize: codePageSize.value }
+    if (codeSearch.value.item_id) data.item_id = codeSearch.value.item_id
+    if (codeSearch.value.batch) data.batch = codeSearch.value.batch
+    /* `used` 是 bool 指针：`false` = 只看没用过的，`undefined` 才是不过滤。
+       空值必须整个字段不传 —— 传 `''` 会被当成 false，看着像「筛了但没筛」。 */
+    if (codeSearch.value.used === true || codeSearch.value.used === false) {
+      data.used = codeSearch.value.used
+    }
+    const res = await getWishCodeList(data)
+    if (res.code === 0) {
+      codes.value = res.data.list ?? []
+      codeTotal.value = res.data.total ?? 0
+    }
+  }
+  const onCodeSearch = () => {
+    codePage.value = 1
+    getCodes()
+  }
+  const onCodeReset = () => {
+    codeSearch.value = { item_id: '', batch: '', used: '' }
+    codePage.value = 1
+    getCodes()
+  }
+  const onCodePage = (v) => {
+    codePage.value = v
+    getCodes()
+  }
+  const onCodeSize = (v) => {
+    codePageSize.value = v
+    getCodes()
+  }
+
+  const getBatches = async () => {
+    try {
+      const r = await getWishCodeBatches()
+      batches.value = r?.data ?? []
+    } catch {
+      batches.value = [] /* 拉不到就退化成空下拉，别拦整页 */
+    }
+  }
+
+  /* 过期是**核销时真会拦**的（平台 `RedeemCode` 里比 `expire_at`），
+     所以这里敢写「已过期」；不然就是在骗运营。 */
+  const isExpired = (row) =>
+    !row.used && row.expire_at > 0 && row.expire_at * 1000 < Date.now()
+  const codeStateText = (row) => (row.used ? '已使用' : isExpired(row) ? '已过期' : '未使用')
+  const codeTagType = (row) => (row.used ? 'info' : isExpired(row) ? 'warning' : 'success')
+
+  /* ---------- 生成 ---------- */
+  const genVisible = ref(false)
+  const genLoading = ref(false)
+  const genForm = ref({ item_id: '', count: 50, batch: '', expireDays: 0 })
+
+  const openGenerate = () => {
+    genForm.value = {
+      item_id: codeItems.value[0]?.item_id ?? '',
+      count: 50,
+      batch: '',
+      expireDays: 0
+    }
+    genVisible.value = true
+  }
+
+  const submitGenerate = async () => {
+    const f = genForm.value
+    if (!f.item_id) {
+      ElMessage.error('先选一个「游戏」分类的商品')
+      return
+    }
+    if (!(f.count > 0)) {
+      ElMessage.error('数量要大于 0')
+      return
+    }
+    genLoading.value = true
+    try {
+      const res = await generateWishCodes({
+        item_id: f.item_id,
+        count: f.count,
+        batch: (f.batch ?? '').trim(),
+        expire_days: f.expireDays || 0
+      })
+      if (res.code === 0) {
+        resultCodes.value = res.data.codes ?? []
+        copied.value = false
+        genVisible.value = false
+        resultVisible.value = true
+        /* 批次号可能是后端自动补的，刷新下拉 + 列表才看得到 */
+        getBatches()
+        getCodes()
+      }
+    } finally {
+      /* ⚠️ 放 finally：失败时按钮必须恢复，否则「生成」永远转下去 */
+      genLoading.value = false
+    }
+  }
+
+  /* ---------- 结果面板（明文只此一次） ---------- */
+  const resultVisible = ref(false)
+  const resultCodes = ref([])
+  const copied = ref(false)
+
+  /* 剪贴板：`navigator.clipboard` 只在 https / localhost 下可用，
+     而后台常常是 http://内网IP ⇒ 必须有 execCommand 兜底，
+     否则「复制」静默失败，运营以为复制到了，其实印出来是空的。 */
+  const writeClipboard = async (text) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text)
+        return true
+      }
+    } catch {
+      /* 落到下面的兜底 */
+    }
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    } catch {
+      return false
+    }
+  }
+
+  const copyCodes = async () => {
+    const ok = await writeClipboard(resultCodes.value.join('\n'))
+    copied.value = ok
+    if (ok) ElMessage.success('已复制，去印卡片吧')
+    else ElMessage.error('复制失败，请手动全选复制')
+  }
+
+  const closeResult = () => {
+    resultVisible.value = false
+    resultCodes.value = []
+  }
+
+  /* ★ 关窗口前问一句：明文只有这一份，误点一下就得作废重发整批。 */
+  const onResultClose = async (done) => {
+    if (resultCodes.value.length && !copied.value) {
+      try {
+        await ElMessageBox.confirm(
+          `这 ${resultCodes.value.length} 个码还没复制。关掉之后表里只剩哈希，找不回来了 —— 只能作废重发。`,
+          '确定关掉？',
+          { type: 'warning', confirmButtonText: '关掉（不要了）', cancelButtonText: '回去复制' }
+        )
+      } catch {
+        return /* 用户点了「回去复制」 */
+      }
+    }
+    resultCodes.value = []
+    done()
+  }
+
+  /* ---------- 作废 ---------- */
+  const onVoidOne = async (row) => {
+    try {
+      await ElMessageBox.confirm(
+        `作废「····${row.code_tail}」这张码？（批次 ${row.batch || '—'}）\n\n作废后家长再输会提示「码无效」。已经用掉的码不能作废。`,
+        '作废激活码',
+        { type: 'warning', confirmButtonText: '作废', cancelButtonText: '取消' }
+      )
+    } catch {
+      return /* 用户点了取消 */
+    }
+    const res = await voidWishCodes({ id: row.id })
+    if (res.code === 0) {
+      ElMessage.success('已作废')
+      getCodes()
+    }
+  }
+
+  const onVoidBatch = async () => {
+    const b = codeSearch.value.batch
+    if (!b) {
+      ElMessage.warning('先在上面按批次筛选，再作废整批')
+      return
+    }
+    try {
+      await ElMessageBox.confirm(
+        `作废批次「${b}」里所有没用过的码？\n\n已经用掉的不动（那个孩子的游戏已经到账）。这个操作不可撤销。`,
+        '作废整批',
+        { type: 'warning', confirmButtonText: '作废整批', cancelButtonText: '取消' }
+      )
+    } catch {
+      return /* 用户点了取消 */
+    }
+    const res = await voidWishCodes({ batch: b })
+    if (res.code === 0) {
+      ElMessage.success(`已作废 ${res.data?.voided ?? 0} 个`)
+      getCodes()
+    }
+  }
+
   onMounted(async () => {
     await loadUsers()
-    await Promise.all([getItems(), getOrders()])
+    /* 游戏下拉：盲盒池和「单款游戏」都要按 game_id 选。
+       失败不拦页面 —— 拉不到就退化成空下拉，比整页白屏好。 */
+    try {
+      const r = await getGameOptions()
+      gameOptions.value = r?.data ?? []
+    } catch {
+      gameOptions.value = []
+    }
+    await loadAllItems()
+    await Promise.all([getItems(), getOrders(), getCodes(), getBatches()])
   })
 </script>
 
@@ -516,5 +1186,26 @@
     color: var(--el-text-color-secondary);
     font-size: 12px;
     line-height: 1.5;
+  }
+  /* 生成结果：明文要能一眼扫完、对得上号，所以等宽 + 序号 */
+  .codebox {
+    margin-top: 12px;
+    max-height: 320px;
+    overflow: auto;
+    padding: 8px 12px;
+    border: 1px solid var(--el-border-color);
+    border-radius: 6px;
+    background: var(--el-fill-color-light);
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .codeline {
+    display: flex;
+    gap: 12px;
+  }
+  .codeline .idx {
+    min-width: 32px;
+    color: var(--el-text-color-secondary);
+    text-align: right;
   }
 </style>

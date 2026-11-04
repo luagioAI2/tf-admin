@@ -56,6 +56,9 @@ APIS = [
     ("POST", "/mall/release/list", "游戏版本列表", "游戏版本"),
     ("POST", "/mall/release/publish", "发布版本", "游戏版本"),
     ("POST", "/mall/release/deactivate", "下架版本", "游戏版本"),
+    # ⚠️ `delete` 是 DELETE 方法。漏了它，页面上「删除版本」按钮会 403，
+    #    而列表 / 发布 / 下架都正常 —— 看着像按钮写错了。
+    ("DELETE", "/mall/release/delete", "删除版本", "游戏版本"),
     # App 用户
     ("POST", "/mall/user/list", "App 用户列表", "App用户"),
     ("GET", "/mall/user/detail", "App 用户详情", "App用户"),
@@ -69,7 +72,14 @@ APIS = [
     # 心愿
     ("POST", "/mall/wish/item/list", "心愿商品列表", "心愿"),
     ("POST", "/mall/wish/item/update", "更新心愿商品", "心愿"),
+    ("POST", "/mall/wish/item/create", "新建心愿商品", "心愿"),
+    ("POST", "/mall/wish/item/delete", "删除心愿商品", "心愿"),
     ("POST", "/mall/wish/order/list", "心愿订单", "心愿"),
+    # 激活码（家长线下买卡 → 孩子输码解锁一款游戏）
+    ("POST", "/mall/wish/code/list", "激活码列表", "心愿"),
+    ("POST", "/mall/wish/code/generate", "批量生成激活码", "心愿"),
+    ("POST", "/mall/wish/code/void", "作废激活码", "心愿"),
+    ("POST", "/mall/wish/code/batches", "激活码批次号", "心愿"),
     # 任务
     ("POST", "/mall/task/list", "任务列表", "任务"),
     ("POST", "/mall/task/instance/list", "任务实例", "任务"),

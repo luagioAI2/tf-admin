@@ -14,6 +14,7 @@ type ApiGroup struct {
 	PlatformUserApi
 	RedeemApi
 	WishApi
+	WishCodeApi
 	TaskApi
 	DashboardApi
 	MerchantApi
@@ -27,6 +28,7 @@ var (
 	platformUserService = service.ServiceGroupApp.MallServiceGroup.PlatformUserService
 	redeemService       = service.ServiceGroupApp.MallServiceGroup.RedeemService
 	wishService         = service.ServiceGroupApp.MallServiceGroup.WishService
+	wishCodeService     = service.ServiceGroupApp.MallServiceGroup.WishCodeService
 	taskService         = service.ServiceGroupApp.MallServiceGroup.TaskService
 	dashboardService    = service.ServiceGroupApp.MallServiceGroup.DashboardService
 	merchantService     = service.ServiceGroupApp.MallServiceGroup.MerchantService

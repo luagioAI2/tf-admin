@@ -279,6 +279,39 @@ func (i *initApi) InitializeData(ctx context.Context) (context.Context, error) {
 		{ApiGroup: "招商", Method: "POST", Path: "/mall/merchant/list", Description: "招商申请列表"},
 		{ApiGroup: "招商", Method: "POST", Path: "/mall/merchant/review", Description: "审核招商申请"},
 		{ApiGroup: "招商", Method: "GET", Path: "/mall/merchant/pending-count", Description: "待审核数"},
+		// ===== 心愿商城（mall 模块）=====
+		//
+		// ⚠️ 同上面的提醒：这里只是给**全新库**用的；老库靠 syncApi 补。
+		{ApiGroup: "心愿", Method: "POST", Path: "/mall/wish/item/list", Description: "心愿商品列表"},
+		{ApiGroup: "心愿", Method: "POST", Path: "/mall/wish/item/update", Description: "更新心愿商品"},
+		{ApiGroup: "心愿", Method: "POST", Path: "/mall/wish/item/create", Description: "新建心愿商品"},
+		{ApiGroup: "心愿", Method: "POST", Path: "/mall/wish/item/delete", Description: "删除心愿商品"},
+		{ApiGroup: "心愿", Method: "POST", Path: "/mall/wish/order/list", Description: "心愿订单"},
+		{ApiGroup: "心愿", Method: "POST", Path: "/mall/wish/code/list", Description: "激活码列表"},
+		{ApiGroup: "心愿", Method: "POST", Path: "/mall/wish/code/generate", Description: "批量生成激活码"},
+		{ApiGroup: "心愿", Method: "POST", Path: "/mall/wish/code/void", Description: "作废激活码"},
+		{ApiGroup: "心愿", Method: "POST", Path: "/mall/wish/code/batches", Description: "激活码批次号"},
+
+		// ===== 兑换 / 游戏 / 版本 / 任务 / 看板（mall 模块）=====
+		{ApiGroup: "兑换", Method: "POST", Path: "/mall/redeem/item/list", Description: "兑换商品列表"},
+		{ApiGroup: "兑换", Method: "POST", Path: "/mall/redeem/item/update", Description: "更新兑换商品"},
+		{ApiGroup: "兑换", Method: "POST", Path: "/mall/redeem/record/list", Description: "兑换记录"},
+
+		{ApiGroup: "游戏", Method: "POST", Path: "/mall/game/list", Description: "游戏列表"},
+		{ApiGroup: "游戏", Method: "POST", Path: "/mall/game/options", Description: "游戏下拉选项"},
+		{ApiGroup: "游戏", Method: "POST", Path: "/mall/game/update", Description: "更新游戏"},
+
+		{ApiGroup: "游戏版本", Method: "POST", Path: "/mall/release/list", Description: "游戏版本列表"},
+		{ApiGroup: "游戏版本", Method: "POST", Path: "/mall/release/publish", Description: "发布版本"},
+		{ApiGroup: "游戏版本", Method: "POST", Path: "/mall/release/deactivate", Description: "下架版本"},
+		{ApiGroup: "游戏版本", Method: "DELETE", Path: "/mall/release/delete", Description: "删除版本"},
+
+		{ApiGroup: "任务", Method: "POST", Path: "/mall/task/list", Description: "任务列表"},
+		{ApiGroup: "任务", Method: "POST", Path: "/mall/task/instance/list", Description: "任务实例"},
+
+		{ApiGroup: "看板", Method: "GET", Path: "/mall/dashboard/overview", Description: "经营看板总览"},
+
+		{ApiGroup: "App用户", Method: "POST", Path: "/mall/user/reset-password", Description: "重置用户密码"},
 	}
 	if err := db.Create(&entities).Error; err != nil {
 		return ctx, errors.Wrap(err, sysModel.SysApi{}.TableName()+"表数据初始化失败!")

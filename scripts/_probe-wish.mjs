@@ -138,7 +138,10 @@ try {
   const newLabel = `探针外链${Date.now() % 10000}`
 
   const openEditAndSetLabel = async (label) => {
-    /* 找到目标那一行的「改外链」按钮：按行定位，不能点第一个（那是盲盒） */
+    /* 找到目标那一行的「编辑」按钮：按行定位，不能点第一个（那是盲盒）。
+       ⚠️ 2026-11-04 起操作列是「编辑 / 删除」两个按钮，原来那个
+          「改外链」按钮已经没有了 —— 按旧文案找会**点空**，
+          报错还是「找不到按钮」，看着像页面没渲染。 */
     const hit = await page.evaluate((name) => {
       const t = [...document.querySelectorAll('.el-table')].find((x) => x.offsetParent !== null)
       if (!t) return null
@@ -147,13 +150,13 @@ try {
       )
       if (!tr) return null
       const btn = [...tr.querySelectorAll('button')].find((b) =>
-        (b.innerText || '').includes('改外链')
+        (b.innerText || '').trim() === '编辑'
       )
       if (!btn) return null
       const r = btn.getBoundingClientRect()
       return { cx: Math.round(r.x + r.width / 2), cy: Math.round(r.y + r.height / 2) }
     }, target.name)
-    if (!hit) throw new Error(`找不到「${target.name}」那一行的「改外链」按钮`)
+    if (!hit) throw new Error(`找不到「${target.name}」那一行的「编辑」按钮`)
     await page.mouse.click(hit.cx, hit.cy)
     await page.waitForSelector('.el-dialog input', { timeout: 20000 })
     await new Promise((r) => setTimeout(r, 400))
@@ -213,6 +216,100 @@ try {
     `接口 ${JSON.stringify(restored)} / 原文 ${JSON.stringify(target.buy_label)}`
   )
   console.log('  截图（商品页签）：' + (await a.shot('wish-items')))
+
+  /* ============ ⑤.5 「一次开出几款」（5 连开） ============ */
+  /* 这个字段只对盲盒有意义，但**看不见它**和**它没生效**长得一模一样：
+     后台显示 5、接口里是 1 的话，孩子那边换到的是一盒只开 1 款的盲盒，
+     而两边都不会报错。所以两头都要查：界面上的数字，和保存后的接口值。 */
+  console.log('\n⑤.5 盲盒「一次开出几款」')
+
+  const boxItem = apiItems.find((x) => (x.unlock_count ?? 1) > 1)
+  ok('接口里有「一次开多款」的盲盒', !!boxItem, boxItem ? `${boxItem.name} = ${boxItem.unlock_count}` : '没有')
+
+  /* 按名字点某一行的「编辑」，返回弹窗里的整段文字 */
+  const openEditByName = async (name) => {
+    const hit = await page.evaluate((n) => {
+      const t = [...document.querySelectorAll('.el-table')].find((x) => x.offsetParent !== null)
+      if (!t) return null
+      const tr = [...t.querySelectorAll('tbody tr.el-table__row')].find((r) =>
+        (r.innerText || '').includes(n)
+      )
+      if (!tr) return null
+      const btn = [...tr.querySelectorAll('button')].find((b) => (b.innerText || '').trim() === '编辑')
+      if (!btn) return null
+      const r = btn.getBoundingClientRect()
+      return { cx: Math.round(r.x + r.width / 2), cy: Math.round(r.y + r.height / 2) }
+    }, name)
+    if (!hit) throw new Error(`找不到「${name}」那一行的「编辑」按钮`)
+    await page.mouse.click(hit.cx, hit.cy)
+    await page.waitForSelector('.el-dialog input', { timeout: 20000 })
+    await new Promise((r) => setTimeout(r, 400))
+    return page.evaluate(() => document.querySelector('.el-dialog')?.innerText ?? '')
+  }
+
+  const closeEdit = async () => {
+    await a.clickByText('取消')
+    await page.waitForFunction(
+      () => {
+        const d = document.querySelector('.el-dialog')
+        return !d || d.offsetParent === null
+      },
+      { timeout: 20000 }
+    )
+    await new Promise((r) => setTimeout(r, 400))
+  }
+
+  if (boxItem) {
+    const boxText = await openEditByName(boxItem.name)
+    ok(
+      '★ 盲盒的编辑弹窗里有「一次开出几款」',
+      boxText.includes('一次开出几款'),
+      boxText.slice(0, 60)
+    )
+    /* 数字框的值就是接口里的值 —— 显示成 1 的话「5 连开」在界面上根本看不出来 */
+    const shown = await page.evaluate(() => {
+      const items = [...document.querySelectorAll('.el-dialog .el-form-item')]
+      const it = items.find((el) =>
+        (el.querySelector('.el-form-item__label')?.innerText || '').includes('一次开出几款')
+      )
+      return it?.querySelector('input')?.value ?? ''
+    })
+    ok(
+      '★ 界面上的数字 == 接口的 unlock_count',
+      shown === String(boxItem.unlock_count),
+      `界面 ${JSON.stringify(shown)} / 接口 ${boxItem.unlock_count}`
+    )
+    await closeEdit()
+  }
+
+  /* 非盲盒：这个字段不该出现；而且**保存一次之后必须写回 1**
+     （不写回的话，把「盲盒」改成「游戏盒子」之后这个值还留着 5，
+     下次改回盲盒就静默变成 5 连开）。 */
+  const plain = apiItems.find((x) => x.kind !== 'blindbox' && x.buy_url)
+  if (plain) {
+    const plainText = await openEditByName(plain.name)
+    ok(
+      '★ 非盲盒的编辑弹窗里没有「一次开出几款」',
+      !plainText.includes('一次开出几款'),
+      plainText.slice(0, 60)
+    )
+    await a.clickByText('保存')
+    await page.waitForFunction(
+      () => {
+        const d = document.querySelector('.el-dialog')
+        return !d || d.offsetParent === null
+      },
+      { timeout: 20000 }
+    )
+    await new Promise((r) => setTimeout(r, 1200))
+    const after = await adminApi('/mall/wish/item/list', { page: 1, pageSize: 100 })
+    const saved = (after.data?.list ?? []).find((x) => x.item_id === plain.item_id)
+    ok(
+      '★ 非盲盒保存后 unlock_count 写回 1（不写回 = 下次改回盲盒就静默 5 连开）',
+      (saved?.unlock_count ?? 0) === 1,
+      `接口 ${saved?.unlock_count}`
+    )
+  }
 
   /* ============ ⑥ 心愿单页签 ============ */
   console.log('\n⑥ 心愿单')

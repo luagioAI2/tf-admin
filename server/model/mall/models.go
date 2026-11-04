@@ -147,7 +147,8 @@ func (Wallet) TableName() string { return "wallet" }
 // `uid IN (...)` 补齐。
 //
 // ⚠️ 没有钱包行的用户（从没入过账）补 0 —— 那是「还没花过」，
-//    不是「查不到」。判据别写成「余额为 0 就当成异常」。
+//
+//	不是「查不到」。判据别写成「余额为 0 就当成异常」。
 type PlatformUserRow struct {
 	PlatformUser
 	Points  int64 `json:"points"`
@@ -253,19 +254,58 @@ type WishItem struct {
 	Tint        string `gorm:"column:tint" json:"tint"`
 	PartnerName string `gorm:"column:partner_name" json:"partner_name"`
 	GameID      string `gorm:"column:game_id" json:"game_id"`
-	// Pool 盲盒池（JSON 数组字符串），后台只展示不编辑
+	// Pool 盲盒池（JSON 数组字符串）
 	Pool       string `gorm:"column:pool" json:"pool"`
 	PriceCents int64  `gorm:"column:price_cents" json:"price_cents"`
-	Note       string `gorm:"column:note" json:"note"`
-	Notice     string `gorm:"column:notice" json:"notice"`
+	// AgeRange 适龄范围（JSON 数组字符串，如 `[6,12]`）。
+	// 表里是 `text` 存的 JSON，和 `pool` 一个路子。
+	AgeRange string `gorm:"column:age_range" json:"age_range"`
+	Note     string `gorm:"column:note" json:"note"`
+	Notice   string `gorm:"column:notice" json:"notice"`
 	// BuyURL 外链（**只在家长端出现**）
 	BuyURL    string `gorm:"column:buy_url" json:"buy_url"`
 	BuyLabel  string `gorm:"column:buy_label" json:"buy_label"`
 	Archived  bool   `gorm:"column:archived" json:"archived"`
 	SortOrder int    `gorm:"column:sort_order" json:"sort_order"`
+	// UnlockCount 一次开出几款游戏（只对 blindbox 有意义，1 = 单开）
+	//
+	// ★ 「已经解锁的不计算」不是靠这个字段，而是靠开奖时先减掉已拥有：
+	//   池子里写全部游戏，孩子已有的不占名额。
+	// ⚠️ 剩余不足这个数时 C 端会**整单拒绝**，不会「有几款给几款」。
+	UnlockCount int `gorm:"column:unlock_count" json:"unlock_count"`
 }
 
 func (WishItem) TableName() string { return "wish_item" }
+
+// WishCode 激活码（对应 `wish_code` 表）。
+//
+// ⚠️ 表里**只有 sha256**，没有明文。明文只在「生成那一瞬间」返回一次 ——
+// 打印卡片要用它。丢了只能作废重发，找不回来。
+//
+// ⚠️ 这张表和 C 端 `tf-platform-api` 共用。哈希口径必须和那边
+// `internal/app/service/wish_srv.go` 的 `hashWishCode` **逐字一致**，
+// 否则后台生成的码在 App 里全是「没有这个码」，而且**两边都不报错**。
+type WishCode struct {
+	BaseModel
+
+	// CodeHash 明文码的 sha256（唯一）。`json:"-"`：列表里没有它的用处，
+	// 而它是「能反查出码」的唯一线索，不往外送。
+	CodeHash string `gorm:"column:code_hash" json:"-"`
+	// CodeTail 后 4 位，方便家长核对是哪张卡
+	CodeTail string `gorm:"column:code_tail" json:"code_tail"`
+	// ItemID 这张码解锁哪件商品（空 = 通用码，不解锁东西）
+	ItemID string `gorm:"column:item_id" json:"item_id"`
+	// Batch 批次号（运营自己起的名字，如「2026双11-游戏盲盒」）
+	Batch string `gorm:"column:batch" json:"batch"`
+
+	Used      bool   `gorm:"column:used" json:"used"`
+	UsedByUID uint   `gorm:"column:used_by_uid" json:"used_by_uid"`
+	UsedAt    *int64 `gorm:"column:used_at" json:"used_at"`
+	// ExpireAt 过期时间（0 = 永不过期）
+	ExpireAt int64 `gorm:"column:expire_at" json:"expire_at"`
+}
+
+func (WishCode) TableName() string { return "wish_code" }
 
 // WishOffer 家长定价（对应 `wish_offer` 表）
 type WishOffer struct {

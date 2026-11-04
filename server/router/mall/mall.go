@@ -28,6 +28,7 @@ var (
 	platformUserApi = api.ApiGroupApp.MallApiGroup.PlatformUserApi
 	redeemApi       = api.ApiGroupApp.MallApiGroup.RedeemApi
 	wishApi         = api.ApiGroupApp.MallApiGroup.WishApi
+	wishCodeApi     = api.ApiGroupApp.MallApiGroup.WishCodeApi
 	taskApi         = api.ApiGroupApp.MallApiGroup.TaskApi
 	dashboardApi    = api.ApiGroupApp.MallApiGroup.DashboardApi
 	merchantApi     = api.ApiGroupApp.MallApiGroup.MerchantApi
@@ -118,10 +119,17 @@ func (r *WishRouter) InitWishRouter(router *gin.RouterGroup) {
 	groupWithoutRecord := router.Group("mall/wish")
 	{
 		group.POST("item/update", wishApi.ItemUpdate)
+		group.POST("item/create", wishApi.ItemCreate)
+		group.POST("item/delete", wishApi.ItemDelete)
+		// 激活码：生成和作废都进操作记录（「谁把一批码作废了」要查得到）
+		group.POST("code/generate", wishCodeApi.GenerateCodes)
+		group.POST("code/void", wishCodeApi.VoidCode)
 	}
 	{
 		groupWithoutRecord.POST("item/list", wishApi.ItemList)
 		groupWithoutRecord.POST("order/list", wishApi.OrderList)
+		groupWithoutRecord.POST("code/list", wishCodeApi.CodeList)
+		groupWithoutRecord.POST("code/batches", wishCodeApi.CodeBatches)
 	}
 }
 

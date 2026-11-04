@@ -12,8 +12,8 @@ import service from '@/utils/request'
        真正的兑换价在订单上（`voucher_price`，单位 = 券）。
        把 `price_cents` 当券数显示，会把「69 元」写成「6900 券」。
 
-   ⚠️ 后台只能改 **外链 / 外链文字 / 上下架 / 排序**（`item/update`）。
-      不能新建商品，也不能改订单状态 —— 状态机是孩子和家长在 App 里推的
+   ⚠️ 后台能改商品本身（`item/create` / `item/update` / `item/delete`），
+      **但仍然不能改订单状态** —— 状态机是孩子和家长在 App 里推的
       （wished → committed → confirmed → done / cancelled）。
       后台长出「改状态」按钮就等于能凭空扣券、凭空退券。
 
@@ -32,11 +32,31 @@ export const getWishItemList = (data) => {
   })
 }
 
-// @Summary 调整心愿商品（外链 / 上下架 / 排序）
+// @Summary 调整心愿商品（全字段；只传要改的那几个）
 // @Router /mall/wish/item/update [post]
 export const updateWishItem = (data) => {
   return service({
     url: '/mall/wish/item/update',
+    method: 'post',
+    data
+  })
+}
+
+// @Summary 新建心愿商品
+// @Router /mall/wish/item/create [post]
+export const createWishItem = (data) => {
+  return service({
+    url: '/mall/wish/item/create',
+    method: 'post',
+    data
+  })
+}
+
+// @Summary 删除心愿商品（只允许删没被兑换过的）
+// @Router /mall/wish/item/delete [post]
+export const deleteWishItem = (data) => {
+  return service({
+    url: '/mall/wish/item/delete',
     method: 'post',
     data
   })

@@ -379,6 +379,32 @@ func (i *initCasbin) InitializeData(ctx context.Context) (context.Context, error
 		{Ptype: "p", V0: "888", V1: "/mall/merchant/list", V2: "POST"},
 		{Ptype: "p", V0: "888", V1: "/mall/merchant/review", V2: "POST"},
 		{Ptype: "p", V0: "888", V1: "/mall/merchant/pending-count", V2: "GET"},
+		// 心愿商城（商品可配 + 激活码）
+		{Ptype: "p", V0: "888", V1: "/mall/wish/item/list", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/wish/item/update", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/wish/item/create", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/wish/item/delete", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/wish/order/list", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/wish/code/list", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/wish/code/generate", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/wish/code/void", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/wish/code/batches", V2: "POST"},
+
+		// 兑换 / 游戏 / 版本 / 任务 / 看板
+		{Ptype: "p", V0: "888", V1: "/mall/redeem/item/list", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/redeem/item/update", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/redeem/record/list", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/game/list", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/game/options", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/game/update", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/release/list", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/release/publish", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/release/deactivate", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/release/delete", V2: "DELETE"},
+		{Ptype: "p", V0: "888", V1: "/mall/task/list", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/task/instance/list", V2: "POST"},
+		{Ptype: "p", V0: "888", V1: "/mall/dashboard/overview", V2: "GET"},
+		{Ptype: "p", V0: "888", V1: "/mall/user/reset-password", V2: "POST"},
 	}
 	if err := db.Create(&entities).Error; err != nil {
 		return ctx, errors.Wrap(err, "Casbin 表 ("+i.InitializerName()+") 数据初始化失败!")
