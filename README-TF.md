@@ -457,7 +457,17 @@ python scripts/check-mall-perms.py     # 逐个体检：哪个接口还是「权
 ★ 邀请码由商家 uid **确定性推导**（`TF<uid 的 36 进制>-<4 位校验>`），不落表；
 后台和 `tf-platform-api` 两份实现必须逐字节一致（`template_test.go` 钉了已知值）。
 
-验收：`python scripts/check-menu-level2.py`（84 条）+ `node scripts/_probe-template.mjs`（27 条）
+★★ **这里配的东西要 App 那边 `POST /api/template/apply` 才落到孩子身上**
+（服务端按蓝图铺出 `task` / `redeem_item`，App 的 pull 再搬进本地）。
+也就是说「后台改完」和「孩子看到」之间隔着一次 App 启动：
+**已经装过的老用户不会变**，新注册/新装的才会。全链路见
+`tf-platform-api/docs/TEMPLATE.md`。
+
+★ 商家那一页的码（`data-probe="invite-code"`）就是推广物料上印的那个；
+用户带着它注册（或点带 `?invite=` 的链接进来），才会看到这个商家的模板。
+码是异步取回来的，探针里要等它渲染出来再点按钮 —— 它插进来会把工具栏推下去。
+
+验收：`python scripts/check-menu-level2.py`（85 条）+ `node scripts/_probe-template.mjs`（30 条）
 + `node scripts/_probe-portal-ui.mjs`（25 条，含商家侧 4.5 段）。
 
 ### 4.5 招商审核（2026-10-29 新增，**第一个有页面的模块**）
