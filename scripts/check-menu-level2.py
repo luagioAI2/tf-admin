@@ -117,7 +117,7 @@ def main():
     check("★ 老 seed-menu.py 没在商城运营下重建出重复的「游戏管理」(mallGame)",
           menu(conn, "mallGame") is None)
 
-    print("\n== ③·5 全库没有重名菜单 ==")
+    print("\n== ③·5 全库没有重名菜单 / 一级菜单排序不并列 ==")
     # ★ 1003 是「家长 + 商家」两棵树，seed-portal.py 规划时同一个菜单会出现两次。
     #   已有的行看不出来（两次都「已存在，跳过」），但**新加一条**时会插两条，
     #   左侧就出现两个同名入口、各授权给一个角色（实测踩过一次）。
@@ -127,6 +127,14 @@ def main():
     )]
     check("★ 没有重名菜单（重名 = 左侧出现两个同名入口，且各只对一个角色可见）",
           not dups, dups)
+    # ★ 一级菜单并列 sort：GVA 的 getMenu 只按 sort 排，并列时顺序由 SQLite 决定，
+    #   刷新两次位置可能就不一样（新加的「模板配置」第一版正好和「超级管理员」撞在 3）。
+    ties = [dict(r) for r in conn.execute(
+        "SELECT sort, count(*) n, group_concat(title) titles FROM sys_base_menus"
+        " WHERE parent_id=0 AND deleted_at IS NULL AND hidden=0"
+        " GROUP BY sort HAVING n > 1"
+    )]
+    check("★ 一级菜单的 sort 不并列（并列时顺序不稳定）", not ties, ties)
 
     print("\n== ④ 菜单授权：只有 888，门户角色一条都没有 ==")
     all_ids = [m["id"] for m in (mall, tpl, wish, game) if m] + ids

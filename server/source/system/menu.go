@@ -71,7 +71,7 @@ func (i *initMenu) InitializeData(ctx context.Context) (next context.Context, er
 		// 模板配置：新用户首次启动铺的任务 / 兑换内容。
 		// ★ 商家也有这一页（`商家中心 → 我的模板`），但走的是 seed-portal.py 那棵树，
 		//   不在这里 —— initdb 只建超管这套菜单。
-		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "templateRoot", Name: "templateRoot", Component: "view/routerHolder.vue", Sort: 3, Meta: Meta{Title: "模板配置", Icon: "files"}},
+		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "templateRoot", Name: "templateRoot", Component: "view/routerHolder.vue", Sort: 6, Meta: Meta{Title: "模板配置", Icon: "files"}},
 		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "wishMall", Name: "wishMall", Component: "view/routerHolder.vue", Sort: 4, Meta: Meta{Title: "心愿商城", Icon: "present"}},
 		{MenuLevel: 0, Hidden: false, ParentId: 0, Path: "gameRoot", Name: "gameRoot", Component: "view/routerHolder.vue", Sort: 5, Meta: Meta{Title: "游戏", Icon: "platform"}},
 	}

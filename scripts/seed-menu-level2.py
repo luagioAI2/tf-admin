@@ -65,8 +65,10 @@ WEB_VIEW = os.path.join(HERE, "..", "web", "src", "view")
 AUTHORITY = 888  # 只有超级管理员
 
 # (path, name, title, component 相对 web/src, icon, sort)
+# ★ sort 别和「超级管理员」撞（它也是 3）：GVA 的 getMenu 只按 sort 排，
+#   并列时顺序由 SQLite 决定 —— 刷新两次位置可能就不一样。
 GROUPS = [
-    ("templateRoot", "templateRoot", "模板配置", "view/routerHolder.vue", "files", 3),
+    ("templateRoot", "templateRoot", "模板配置", "view/routerHolder.vue", "files", 6),
     ("wishMall", "wishMall", "心愿商城", "view/routerHolder.vue", "present", 4),
     ("gameRoot", "gameRoot", "游戏", "view/routerHolder.vue", "platform", 5),
 ]
