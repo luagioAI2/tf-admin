@@ -34,7 +34,7 @@
             <span class="dim" style="margin-left: 12px">共 {{ itemTotal }} 个商品</span>
           </div>
           <el-table :data="items" style="width: 100%" row-key="item_id">
-            <el-table-column align="left" label="商品" min-width="220">
+            <el-table-column align="left" label="商品" min-width="200">
               <template #default="scope">
                 <span class="emoji">{{ scope.row.emoji || '🎁' }}</span>
                 <span class="name">{{ scope.row.name }}</span>
@@ -42,10 +42,10 @@
                 <div v-if="scope.row.notice" class="note faint">须知：{{ scope.row.notice }}</div>
               </template>
             </el-table-column>
-            <el-table-column align="left" label="分类" width="90">
+            <el-table-column align="left" label="分类" width="76">
               <template #default="scope">{{ kindText(scope.row.kind) }}</template>
             </el-table-column>
-            <el-table-column align="left" label="参考价" width="100">
+            <el-table-column align="left" label="参考价" width="86">
               <template #default="scope">
                 <!-- ⚠️ 这个字段是**人民币分**，不是券。0 表示「没标价」（游戏类都是 0） -->
                 <span v-if="scope.row.price_cents > 0" class="num">
@@ -54,7 +54,7 @@
                 <span v-else class="dim">—</span>
               </template>
             </el-table-column>
-            <el-table-column align="left" label="合作方" width="110">
+            <el-table-column align="left" label="合作方" width="88">
               <template #default="scope">
                 <span v-if="scope.row.partner_name">{{ scope.row.partner_name }}</span>
                 <span v-else class="dim">—</span>
@@ -63,13 +63,13 @@
             <!-- 归属：`merchant_uid = 0` 是**平台自营**，不是「没填」。
                  商家后台只能看到 / 改到自己名下的那些（见 PortalService.MerchantItems），
                  所以这一列是运营判断「这条该不该我来动」的唯一依据。 -->
-            <el-table-column align="left" label="归属" width="120">
+            <el-table-column align="left" label="归属" width="88">
               <template #default="scope">
                 <span v-if="!scope.row.merchant_uid" class="dim">平台自营</span>
                 <span v-else class="name">{{ merchantLabel(scope.row.merchant_uid) }}</span>
               </template>
             </el-table-column>
-            <el-table-column align="left" label="外链" min-width="180">
+            <el-table-column align="left" label="外链" min-width="130">
               <template #default="scope">
                 <a
                   v-if="scope.row.buy_url"
@@ -81,27 +81,50 @@
                   {{ scope.row.buy_label || '（没写文字）' }}
                 </a>
                 <span v-else class="dim">—</span>
-                <div v-if="scope.row.buy_url" class="note faint mono">
+                <div
+                  v-if="scope.row.buy_url"
+                  class="note faint mono url"
+                  :title="scope.row.buy_url"
+                >
                   {{ shortUrl(scope.row.buy_url) }}
                 </div>
               </template>
             </el-table-column>
-            <el-table-column align="left" label="排序" width="70">
+            <el-table-column align="left" label="排序" width="56">
               <template #default="scope">
                 <span class="num">{{ scope.row.sort_order }}</span>
               </template>
             </el-table-column>
-            <el-table-column align="left" label="状态" width="90">
+            <el-table-column align="left" label="状态" width="80">
               <template #default="scope">
                 <el-tag :type="scope.row.archived ? 'info' : 'success'" size="small">
                   {{ scope.row.archived ? '已下架' : '在架' }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column align="left" label="更新于" width="160">
+            <el-table-column align="left" label="更新于" width="130">
               <template #default="scope">{{ formatTs(scope.row.updated_at) }}</template>
             </el-table-column>
-            <el-table-column align="left" label="操作" width="150" fixed="right">
+            <!-- 购买：**临时开关**，不是下架。
+                 淘宝 / 京东那条链接失效时关掉 ⇒ 两端都不摆「去购买」，
+                 商品照旧在架（孩子还能许愿，家长自己买完还能回来收尾）。
+                 ⚠️ 判据写 `=== false`：老数据这一列可能是 null，
+                    null 要当成「开」，写成 `!buy_open` 会把老商品全显示成关闭。
+                 ★ `fixed="right"`：列宽已经压到 1440 下不横向滚动（1130 < 1140），
+                   但 1366 / 1280 的笔记本上仍会滚 —— 一滚它就被右侧固定的
+                   「操作」列压在底下（实测完全看不见）。「买没买得动」是运营
+                   要一眼扫的状态，所以跟「操作」一起钉在右边。 -->
+            <el-table-column align="left" label="购买" width="80" fixed="right">
+              <template #default="scope">
+                <el-tag
+                  :type="scope.row.buy_open === false ? 'warning' : 'success'"
+                  size="small"
+                >
+                  {{ scope.row.buy_open === false ? '已关闭' : '可购买' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column align="left" label="操作" width="116" fixed="right">
               <template #default="scope">
                 <el-button type="primary" link @click="openEdit(scope.row)">编辑</el-button>
                 <el-button type="danger" link @click="onDelete(scope.row)">删除</el-button>
@@ -459,6 +482,7 @@
         <el-form-item label="外链">
           <el-input
             v-model="editForm.buy_url"
+            data-buy-url
             placeholder="https://…（留空 = 不给链接）"
             clearable
           />
@@ -469,7 +493,45 @@
           </div>
         </el-form-item>
         <el-form-item label="外链文字">
-          <el-input v-model="editForm.buy_label" placeholder="去淘宝购买" clearable />
+          <el-input
+            v-model="editForm.buy_label"
+            data-buy-label
+            placeholder="去淘宝购买"
+            clearable
+          />
+        </el-form-item>
+        <!-- 模拟购买路径：按**商品名字**拼一条对应平台的搜索页。
+             测试商品、还没上架的商品用它先把「去购买」这条路跑通，
+             不用等运营去开一个真商品。 -->
+        <el-form-item label="模拟购买路径">
+          <el-button-group>
+            <el-button
+              v-for="p in BUY_PRESETS"
+              :key="p.key"
+              :data-buy-preset="p.key"
+              @click="fillBuyPreset(p)"
+            >
+              {{ p.label }}
+            </el-button>
+          </el-button-group>
+          <div class="hint">
+            一点就把「外链 / 外链文字」换成该平台的<b>搜索页</b>（按商品名字搜）。
+            这只是让流程跑得通的模拟链接；正式上架请换成商品详情页。
+          </div>
+        </el-form-item>
+        <!-- 临时关闭购买：链接失效时用，**不是下架** -->
+        <el-form-item label="开启购买">
+          <el-switch
+            v-model="editForm.buy_open"
+            data-buy-open
+            active-text="开"
+            inactive-text="关"
+          />
+          <div class="hint">
+            关掉之后<b>两端都不再显示「去购买」</b>，但商品照旧在架 ——
+            孩子还能许愿，家长自己买完还能回来点「已经买好了」。
+            淘宝 / 京东那条链接打不开时，用它临时关掉。
+          </div>
         </el-form-item>
         <el-form-item label="排序">
           <el-input-number v-model="editForm.sort_order" :min="0" :max="9999" :step="1" />
@@ -783,6 +845,38 @@
     { value: 'berry', label: '莓红' }
   ]
 
+  /* 模拟购买路径：按商品名字拼一条平台的**搜索页**。
+     为什么是搜索页：运营手上不一定有商品详情页的链接（尤其是还没上架的），
+     而搜索页对任何名字都能打开 —— 用来先把「去购买」那条流程跑通。
+     ⚠️ 真商品请换成商品详情页；搜索页只保证「点得开」，不保证「买得到」。 */
+  const BUY_PRESETS = [
+    {
+      key: 'jd',
+      label: '京东',
+      text: '去京东看看',
+      url: (q) => `https://search.jd.com/Search?keyword=${encodeURIComponent(q)}`
+    },
+    {
+      key: 'taobao',
+      label: '淘宝',
+      text: '去淘宝看看',
+      url: (q) => `https://s.taobao.com/search?q=${encodeURIComponent(q)}`
+    },
+    {
+      key: 'tmall',
+      label: '天猫',
+      text: '去天猫看看',
+      url: (q) => `https://list.tmall.com/search_product.htm?q=${encodeURIComponent(q)}`
+    }
+  ]
+
+  /** 一键填「外链 + 外链文字」。名字还没填时用「礼物」兜底（搜索页能打开） */
+  const fillBuyPreset = (p) => {
+    const q = (editForm.value.name || '').trim() || '礼物'
+    editForm.value.buy_url = p.url(q)
+    editForm.value.buy_label = p.text
+  }
+
   const blankForm = () => ({
     item_id: '',
     kind: 'blindbox',
@@ -802,6 +896,8 @@
     notice: '',
     buy_url: '',
     buy_label: '',
+    /** 是否开放购买。关掉 = 两端都不摆「去购买」（临时关，不是下架） */
+    buy_open: true,
     sort_order: 100,
     /** 0 = 平台自营。商家后台看不到 `merchant_uid = 0` 的商品 */
     merchant_uid: 0,
@@ -870,6 +966,8 @@
       notice: row.notice || '',
       buy_url: row.buy_url || '',
       buy_label: row.buy_label || '',
+      /* `=== false`：老数据这一列是 null，要当「开」 */
+      buy_open: row.buy_open !== false,
       sort_order: row.sort_order ?? 100,
       merchant_uid: row.merchant_uid || 0,
       archived: !!row.archived
@@ -922,6 +1020,7 @@
       notice: (f.notice ?? '').trim(),
       buy_url: url,
       buy_label: (f.buy_label ?? '').trim(),
+      buy_open: f.buy_open !== false,
       sort_order: f.sort_order,
       merchant_uid: f.merchant_uid || 0,
       archived: f.archived
@@ -1252,6 +1351,12 @@
   }
   .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  /* 外链那行只回答「是哪家」—— 窄列下一换行就把行高顶成三行 */
+  .url {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .hint {
     margin-top: 2px;

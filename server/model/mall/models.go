@@ -271,10 +271,20 @@ type WishItem struct {
 	//
 	// ★ 2026-11-06 起**两端都下发**，而且它是「去购买」按钮**存不存在**的
 	// 唯一判据：留空 = C 端不摆这颗按钮（孩子卡片弹框 + 家长确认页都算）。
-	BuyURL    string `gorm:"column:buy_url" json:"buy_url"`
-	BuyLabel  string `gorm:"column:buy_label" json:"buy_label"`
-	Archived  bool   `gorm:"column:archived" json:"archived"`
-	SortOrder int    `gorm:"column:sort_order" json:"sort_order"`
+	BuyURL   string `gorm:"column:buy_url" json:"buy_url"`
+	BuyLabel string `gorm:"column:buy_label" json:"buy_label"`
+	// BuyOpen 是否开放购买（默认开）。
+	//
+	// ★ 给「淘宝 / 京东那条链接突然买不了了」用的**临时开关**：关掉之后
+	//   C 端不再下发外链 ⇒ 孩子卡片弹框和家长确认页都不摆「去购买」，
+	//   但商品照旧在架（孩子能许愿、家长自己买完还能回来收尾）。
+	//   ⚠️ 和 `Archived`（下架）不是一回事：下架是把商品藏起来。
+	//
+	// ⚠️ `default:true` 不能省：AutoMigrate 靠它给存量行补 1，
+	//   没有它，加列之后老商品全读成 false —— 全站按钮一起消失、不报错。
+	BuyOpen   bool `gorm:"column:buy_open;default:true" json:"buy_open"`
+	Archived  bool `gorm:"column:archived" json:"archived"`
+	SortOrder int  `gorm:"column:sort_order" json:"sort_order"`
 	// UnlockCount 一次开出几款游戏（只对 blindbox 有意义，1 = 单开）
 	//
 	// ★ 「已经解锁的不计算」不是靠这个字段，而是靠开奖时先减掉已拥有：

@@ -172,6 +172,12 @@ func (s *WishService) UpdateItem(ctx context.Context, req request.UpdateWishItem
 	if req.BuyLabel != nil {
 		fields["buy_label"] = *req.BuyLabel
 	}
+	if req.BuyOpen != nil {
+		// ★ 这是「临时关掉购买」，不是下架：`archived` 一个字都不动。
+		//   关掉之后 C 端 `WishItem.BuyLink()` 返回空 ⇒ 两端都不摆「去购买」，
+		//   商品照旧在孩子的列表里（还能许愿，家长也能自己买完回来收尾）。
+		fields["buy_open"] = *req.BuyOpen
+	}
 	if req.Archived != nil {
 		fields["archived"] = *req.Archived
 	}
@@ -272,6 +278,10 @@ func (s *WishService) CreateItem(ctx context.Context, req request.CreateWishItem
 		Notice:      req.Notice,
 		BuyURL:      req.BuyURL,
 		BuyLabel:    req.BuyLabel,
+		// 建的时候一律「开」。GORM 会把 `false` 当成零值而改用
+		// `default:true`（见模型注释），所以「建一个关着的」必须建完再改 ——
+		// 见下面那段。
+		BuyOpen:     true,
 		Archived:    req.Archived,
 		SortOrder:   req.SortOrder,
 		UnlockCount: unlock,
@@ -279,6 +289,16 @@ func (s *WishService) CreateItem(ctx context.Context, req request.CreateWishItem
 	}
 	if err := global.GVA_DB.WithContext(ctx).Create(row).Error; err != nil {
 		return "", err
+	}
+	// ⚠️ 「新建时就关着购买」必须建完再改一次：`BuyOpen` 带 `default:true`，
+	//    GORM 在字段是零值（false）时会**省略这一列**，让数据库默认值生效 ——
+	//    不补这一步，运营勾了「不开放购买」，建出来却是开着的，而且不报错。
+	if req.BuyOpen != nil && !*req.BuyOpen {
+		if err := global.GVA_DB.WithContext(ctx).Model(&mall.WishItem{}).
+			Where("item_id = ?", itemID).
+			Update("buy_open", false).Error; err != nil {
+			return "", err
+		}
 	}
 	return itemID, nil
 }

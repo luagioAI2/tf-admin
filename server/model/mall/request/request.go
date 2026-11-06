@@ -175,11 +175,15 @@ type CreateWishItemReq struct {
 	AgeRange   []int    `json:"age_range"`
 	Note       string   `json:"note"`
 	Notice     string   `json:"notice"`
-	// BuyURL 外链。只在家长确认页出现，孩子端读不到
-	BuyURL    string `json:"buy_url"`
-	BuyLabel  string `json:"buy_label"`
-	Archived  bool   `json:"archived"`
-	SortOrder int    `json:"sort_order"`
+	// BuyURL 外链（淘宝 / 京东 …）。两端都下发；空 = 不摆「去购买」
+	BuyURL string `json:"buy_url"`
+	// BuyLabel 外链按钮文字（空 = 客户端用「去购买」）
+	BuyLabel string `json:"buy_label"`
+	// BuyOpen 是否开放购买。nil = 按「开」建（默认值）
+	BuyOpen *bool `json:"buy_open"`
+	// Archived 下架（藏起来）。和 BuyOpen 不是一回事
+	Archived  bool `json:"archived"`
+	SortOrder int  `json:"sort_order"`
 	// UnlockCount 一次开出几款（盲盒用）。0 = 按 1 处理（单开）
 	UnlockCount int `json:"unlock_count"`
 	// MerchantUID 归属商家。0 = 平台自营（运营自己建的商品）
@@ -206,8 +210,10 @@ type UpdateWishItemReq struct {
 	Notice      *string   `json:"notice"`
 	BuyURL      *string   `json:"buy_url"`
 	BuyLabel    *string   `json:"buy_label"`
-	Archived    *bool     `json:"archived"`
-	SortOrder   *int      `json:"sort_order"`
+	// BuyOpen 临时关掉购买。nil = 不动；false = 关（外链不再下发）
+	BuyOpen   *bool `json:"buy_open"`
+	Archived  *bool `json:"archived"`
+	SortOrder *int  `json:"sort_order"`
 	// UnlockCount 一次开出几款（盲盒用）。nil = 不动
 	UnlockCount *int `json:"unlock_count"`
 	// MerchantUID 归属商家。0 = **平台自营**（不是「没填」）。
