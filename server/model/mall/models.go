@@ -267,7 +267,10 @@ type WishItem struct {
 	AgeRange string `gorm:"column:age_range" json:"age_range"`
 	Note     string `gorm:"column:note" json:"note"`
 	Notice   string `gorm:"column:notice" json:"notice"`
-	// BuyURL 外链（**只在家长端出现**）
+	// BuyURL 外链（淘宝 / 京东…）。
+	//
+	// ★ 2026-11-06 起**两端都下发**，而且它是「去购买」按钮**存不存在**的
+	// 唯一判据：留空 = C 端不摆这颗按钮（孩子卡片弹框 + 家长确认页都算）。
 	BuyURL    string `gorm:"column:buy_url" json:"buy_url"`
 	BuyLabel  string `gorm:"column:buy_label" json:"buy_label"`
 	Archived  bool   `gorm:"column:archived" json:"archived"`

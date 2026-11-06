@@ -124,9 +124,11 @@ func (s *WishService) ItemList(ctx context.Context, info request.WishItemSearch)
 
 // UpdateItem 调整心愿商品。
 //
-// ⚠️ `buy_url` 只在**家长端**出现。后台可以改它，
-// 但**不要**把它当成「孩子能看到的推广位」——
-// C 端接口对孩子的响应里根本不返回这个字段。
+// ★ `buy_url` 是「去购买」按钮的**开关**（2026-11-06 起）：
+// 填了就两端都显示按钮，留空就两端都不显示。
+//
+// ⚠️ 所以**不要**填一个自己都不确定的链接来「先占位」——
+// 孩子那边会立刻多出一颗点进去 404 的按钮。
 //
 // 全字段都是指针语义：nil = 这次不动它。见 `UpdateWishItemReq` 的注释。
 func (s *WishService) UpdateItem(ctx context.Context, req request.UpdateWishItemReq) error {
