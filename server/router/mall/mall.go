@@ -68,7 +68,9 @@ func (r *GameReleaseRouter) InitGameReleaseRouter(router *gin.RouterGroup) {
 	groupWithoutRecord := router.Group("mall/release")
 	{
 		group.POST("publish", gameReleaseApi.Publish)
+		group.POST("upload", gameReleaseApi.Upload)
 		group.POST("deactivate", gameReleaseApi.Deactivate)
+		group.POST("set-active", gameReleaseApi.SetActive)
 		group.DELETE("delete", gameReleaseApi.Delete)
 	}
 	{

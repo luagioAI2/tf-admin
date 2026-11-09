@@ -81,6 +81,11 @@ PAGES = [
     ("order", "wishOrder", "心愿单", "view/mall/wish/index.vue", "tickets", 1, "wishMall"),
     ("list", "gameList", "游戏列表", "view/mall/game/index.vue", "grid", 0, "gameRoot"),
     ("code", "gameCode", "游戏激活码", "view/mall/wish/index.vue", "key", 1, "gameRoot"),
+    # 版本发布（2026-11-07）：上传包 → 平台落盘 → 签进游戏目录。
+    # ★ 放在「游戏」组下而不是「商城运营」：它是发游戏包，不是商城运营动作；
+    #   而且 `seed-menu.py` 里原来那条 `mallRelease` 挂在商城运营下，
+    #   两处都留会建出**两个同名菜单**（name 相同但 parent 不同）。
+    ("release", "gameRelease", "版本发布", "view/mall/release/index.vue", "upload", 2, "gameRoot"),
 ]
 
 # 商家中心那一列的排序。

@@ -55,7 +55,13 @@ APIS = [
     # 版本
     ("POST", "/mall/release/list", "游戏版本列表", "游戏版本"),
     ("POST", "/mall/release/publish", "发布版本", "游戏版本"),
+    # 上传包并发布：服务端转发给平台落盘。**这条最容易漏** ——
+    # 列表 / 发布 / 下架都有权限、只有上传 403，症状是「点了没反应」。
+    ("POST", "/mall/release/upload", "上传游戏包并发布", "游戏版本"),
     ("POST", "/mall/release/deactivate", "下架版本", "游戏版本"),
+    # 上架 / 下架（带 active 布尔）。**这个也最容易漏** ——
+    # 漏了的话「下架」能用、「重新上架」403，运营会以为按钮坏了。
+    ("POST", "/mall/release/set-active", "上架/下架游戏版本", "游戏版本"),
     # ⚠️ `delete` 是 DELETE 方法。漏了它，页面上「删除版本」按钮会 403，
     #    而列表 / 发布 / 下架都正常 —— 看着像按钮写错了。
     ("DELETE", "/mall/release/delete", "删除版本", "游戏版本"),

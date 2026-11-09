@@ -147,6 +147,7 @@ func (i *initMenu) InitializeData(ctx context.Context) (next context.Context, er
 		//   /mall/game/* 与 /mall/wish/* 的 casbin 也只有 888，别顺手给门户开。
 		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["gameRoot"], Path: "list", Name: "gameList", Component: "view/mall/game/index.vue", Sort: 0, Meta: Meta{Title: "游戏列表", Icon: "grid"}},
 		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["gameRoot"], Path: "code", Name: "gameCode", Component: "view/mall/wish/index.vue", Sort: 1, Meta: Meta{Title: "游戏激活码", Icon: "key"}},
+		{MenuLevel: 1, Hidden: false, ParentId: menuNameMap["gameRoot"], Path: "release", Name: "gameRelease", Component: "view/mall/release/index.vue", Sort: 2, Meta: Meta{Title: "版本发布", Icon: "upload"}},
 	}
 
 	// 创建子菜单

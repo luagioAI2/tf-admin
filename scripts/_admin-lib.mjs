@@ -347,12 +347,33 @@ export async function openAdmin({ url = 'http://localhost:8891/', viewport } = {
           (el) => (el.innerText || '').trim() === t
         )
         if (!it) continue
+        /* ★★ 先把它滚进**下拉自己**的滚动区再取坐标（2026-11-07 实测踩到）。
+           游戏下拉有 23 项，最后一项在滚动区外面 —— 直接取 rect 拿到的是
+           一个「在可视区外」的坐标，点下去命中别的元素，而且**什么都不报**：
+           `pickOption` 不抛、下拉也没关上，最后表现成「选项没选中」，
+           断言红在别的地方（这里就是「上传按钮还是 disabled」）。
+           和弹窗比屏高要先 `scrollIntoView` 是同一类坑。 */
+        it.scrollIntoView({ block: 'nearest' })
         const r = it.getBoundingClientRect()
-        return { cx: Math.round(r.x + r.width / 2), cy: Math.round(r.y + r.height / 2) }
+        /* 滚完再确认一次「这个坐标真的落在它自己身上」，
+           不然又是「点了个寂寞」—— `elementFromPoint` 是唯一判据。 */
+        const cx = Math.round(r.x + r.width / 2)
+        const cy = Math.round(r.y + r.height / 2)
+        const on = document.elementFromPoint(cx, cy)
+        return {
+          cx,
+          cy,
+          hitSelf: !!on && (on === it || it.contains(on))
+        }
       }
       return null
     }, text)
     if (!hit) throw new Error(`展开的下拉里找不到选项「${text}」`)
+    if (!hit.hitSelf) {
+      throw new Error(
+        `选项「${text}」滚动后仍然不在可点位置（(${hit.cx}, ${hit.cy}) 命中的不是它）`
+      )
+    }
     await page.mouse.move(hit.cx, hit.cy)
     await page.mouse.click(hit.cx, hit.cy)
     await new Promise((r) => setTimeout(r, 600))

@@ -47,6 +47,7 @@
   "/src/view/mall/game/index.vue": "GameList",
   "/src/view/mall/merchant/index.vue": "MallMerchant",
   "/src/view/mall/redeem/index.vue": "MallRedeem",
+  "/src/view/mall/release/index.vue": "GameRelease",
   "/src/view/mall/template/index.vue": "MallTemplate",
   "/src/view/mall/user/index.vue": "MallPlatformUser",
   "/src/view/mall/wish/index.vue": "MallWish",

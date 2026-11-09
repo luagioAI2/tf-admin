@@ -64,3 +64,9 @@ __pycache__/
 
 # 探针的截图 / 临时产物
 .e2e-scratch/
+
+# 一次性走查探针（要开浏览器 + 后台 + 平台三件套，跑完就废）。
+# ★ `scripts/_admin-lib.mjs` 是共用工具，**早就在版本库里**；
+#   已跟踪的文件不受忽略规则影响，这条管不到它。
+scripts/_probe-*.mjs
+scripts/_cleanup-*.mjs

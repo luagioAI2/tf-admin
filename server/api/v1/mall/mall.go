@@ -1,6 +1,7 @@
 package mall
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
@@ -167,6 +168,48 @@ func (a *GameReleaseApi) Delete(c *gin.Context) {
 	response.OkWithMessage("删除成功", c)
 }
 
+// Upload 上传包并发布（multipart，转发给平台落盘）
+// @Tags     MallGameRelease
+// @Summary  上传游戏包并发布
+// @Accept   multipart/form-data
+// @Produce  application/json
+// @Param    game_id        formData  string  true   "游戏 ID"
+// @Param    version        formData  string  true   "版本号"
+// @Param    channel        formData  string  false  "通道（默认 stable）"
+// @Param    release_notes  formData  string  false  "发布说明"
+// @Param    min_host_api   formData  int     false  "最低宿主 API"
+// @Param    forced         formData  bool    false  "强制更新"
+// @Param    file           formData  file    true   "包文件（.mjs/.js/.zip）"
+// @Success  200  {object}  response.Response{}  "发布结果"
+// @Router   /mall/release/upload [post]
+func (a *GameReleaseApi) Upload(c *gin.Context) {
+	var req mallReq.PublishUploadReq
+	if err := c.ShouldBind(&req); err != nil {
+		response.FailWithMessage("表单不对："+err.Error(), c)
+		return
+	}
+	fh, err := c.FormFile("file")
+	if err != nil {
+		response.FailWithMessage("没收到文件："+err.Error(), c)
+		return
+	}
+
+	code, msg, data, err := gameReleaseService.UploadAndPublish(c.Request.Context(), req, fh)
+	if err != nil {
+		global.GVA_LOG.Error("转发游戏包失败", zap.String("game_id", req.GameID), zap.Error(err))
+		response.FailWithMessage("上传失败："+err.Error(), c)
+		return
+	}
+	/* 平台的业务码要**原样**透出去，不能一律 200。
+	   版本重复 / 包不合法都是运营能自己处理的事（换个版本号、重新打包），
+	   翻成「成功」会让他们以为发上去了。 */
+	if code != 200 {
+		response.FailWithMessage(fmt.Sprintf("平台拒绝（%d）：%s", code, msg), c)
+		return
+	}
+	response.OkWithDetailed(data, "发布成功", c)
+}
+
 // Deactivate 下架版本
 // @Tags     MallGameRelease
 // @Summary  下架游戏版本（active = false）
@@ -184,6 +227,37 @@ func (a *GameReleaseApi) Deactivate(c *gin.Context) {
 	}
 	if err := gameReleaseService.Deactivate(c.Request.Context(), req.ID); err != nil {
 		response.FailWithMessage("下架失败："+err.Error(), c)
+		return
+	}
+	response.OkWithMessage("已下架", c)
+}
+
+// SetActive 上架 / 下架（active=false 下架、true 重新上架）
+//
+// 单独开一个接口而不是把 Deactivate 改成带参：老前端还在调 deactivate，
+// 两个都留着不会打架；新前端用这个可以反悔。
+// @Tags     MallGameRelease
+// @Summary  上架/下架游戏版本
+// @Accept   application/json
+// @Produce  application/json
+// @Param    body  body      object  true  "{id, active}"
+// @Success  200   {object}  response.Response{}  "操作结果"
+// @Router   /mall/release/set-active [post]
+func (a *GameReleaseApi) SetActive(c *gin.Context) {
+	var req struct {
+		ID     uint `json:"id" binding:"required"`
+		Active bool `json:"active"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.FailWithMessage(err.Error(), c)
+		return
+	}
+	if err := gameReleaseService.SetActive(c.Request.Context(), req.ID, req.Active); err != nil {
+		response.FailWithMessage("操作失败："+err.Error(), c)
+		return
+	}
+	if req.Active {
+		response.OkWithMessage("已上架", c)
 		return
 	}
 	response.OkWithMessage("已下架", c)

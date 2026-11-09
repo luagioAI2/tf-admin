@@ -37,4 +37,7 @@ type Server struct {
 
 	// MCP配置
 	MCP MCP `mapstructure:"mcp" json:"mcp" yaml:"mcp"`
+
+	// 平台服务接入（游戏包上传要转发给 tf-platform-api）
+	TFAPI TFAPI `mapstructure:"tf-api" json:"tf-api" yaml:"tf-api"`
 }

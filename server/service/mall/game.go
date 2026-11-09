@@ -218,14 +218,41 @@ func (s *GameReleaseService) Publish(ctx context.Context, req request.PublishRel
 }
 
 // Delete 删除版本
+//
+// ★ 转发给平台，**不要直接 `GVA_DB.Delete`**：两边共用同一个库，后台直接写
+// 一秒钟就生效，但平台内存里的目录缓存（默认 300 秒）不会知道 ——
+// 于是「删了」之后客户端最长还能再看到它 5 分钟。理由详见 game_release_control.go。
 func (s *GameReleaseService) Delete(ctx context.Context, id uint) error {
-	return global.GVA_DB.WithContext(ctx).Delete(&mall.GameRelease{}, id).Error
+	code, msg, err := s.forwardToPlatform(
+		ctx, "/api/admin/game/release/delete", map[string]any{"release_id": id},
+	)
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("平台拒绝（%d）：%s", code, msg)
+	}
+	return nil
+}
+
+// SetActive 上架 / 下架一个版本（active=false 即下架）。同样转发给平台。
+func (s *GameReleaseService) SetActive(ctx context.Context, id uint, active bool) error {
+	code, msg, err := s.forwardToPlatform(
+		ctx, "/api/admin/game/release/set-active",
+		map[string]any{"release_id": id, "active": active},
+	)
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("平台拒绝（%d）：%s", code, msg)
+	}
+	return nil
 }
 
 // Deactivate 下架版本（active = false）
 func (s *GameReleaseService) Deactivate(ctx context.Context, id uint) error {
-	return global.GVA_DB.WithContext(ctx).Model(&mall.GameRelease{}).
-		Where("id = ?", id).Update("active", false).Error
+	return s.SetActive(ctx, id, false)
 }
 
 // ============================ 平台用户与钱包 ============================

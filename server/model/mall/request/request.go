@@ -59,6 +59,21 @@ type PublishReleaseReq struct {
 	ReleaseNotes string `json:"release_notes"`
 }
 
+// PublishUploadReq 上传并发布（multipart 的表单字段）。
+//
+// 和 `PublishReleaseReq` 的区别：**没有 URL / SHA256 / Size**。
+// 那三个值必须由服务端算 —— 让上传者自己填哈希，等于把「包有没有被换掉」
+// 的检测交给上传的人，等于没有。
+type PublishUploadReq struct {
+	GameID       string `form:"game_id" binding:"required"`
+	Version      string `form:"version" binding:"required"`
+	Channel      string `form:"channel"`
+	AssetBase    string `form:"asset_base"`
+	MinHostApi   string `form:"min_host_api"`
+	Forced       string `form:"forced"`
+	ReleaseNotes string `form:"release_notes"`
+}
+
 // ============================ 平台用户 ============================
 
 // PlatformUserSearch 用户查询

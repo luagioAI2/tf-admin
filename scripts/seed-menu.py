@@ -46,8 +46,8 @@ PAGES = [
     ("mallDashboard", "经营看板", "dashboard", "mall/dashboard/index.vue", "data-analysis"),
     ("appUser", "App 用户", "user", "mall/user/index.vue", "user"),
     ("merchant", "招商审核", "merchant", "mall/merchant/index.vue", "message"),
-    # 下面这些**页面还没写**，脚本会自动跳过（并提示），别硬建菜单。
-    ("mallRelease", "游戏版本", "release", "mall/release/index.vue", "upload"),
+    # 「游戏版本发布」不在这里 —— 它挂在**「游戏」一级菜单**下，
+    # 由 `seed-menu-level2.py` 建（同一个页面挂在两个父菜单下会建出两个同名菜单）。
     ("mallRedeem", "兑换商城", "redeem", "mall/redeem/index.vue", "shopping-cart"),
     ("mallTask", "任务记录", "task", "mall/task/index.vue", "list"),
     # ★ #16 起「心愿商品 / 心愿单 / 游戏列表 / 游戏激活码」由
