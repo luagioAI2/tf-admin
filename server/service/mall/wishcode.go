@@ -151,8 +151,28 @@ func (s *WishCodeService) GenerateCodes(ctx context.Context, req request.Generat
 		Where("item_id = ?", req.ItemID).First(&item).Error; err != nil {
 		return nil, fmt.Errorf("商品不存在：%s", req.ItemID)
 	}
-	if strings.TrimSpace(item.GameID) == "" {
-		return nil, fmt.Errorf("「%s」没有绑定具体游戏，码核销后解锁不出东西；请先把商品分类改成「单款游戏」并选好那一款", item.Name)
+	// 这张码核销后能给出什么，决定它能不能生成。
+	//
+	// ★ 2026-11-12 起**盲盒也能生成码**：线下卖的「盲盒 5 连」就是一张卡
+	//   换一次 5 连开。盲盒商品的 `game_id` 是空的（池子在 `pool` 里），
+	//   原来这里一律要求 `game_id` ⇒ 这种卡连码都生不出来，
+	//   而报错文案还会误导运营去「把商品改成单款游戏」（那会把 5 连改成 1 款）。
+	//
+	//   核销在 C 端按 `kind` 分岔（见 `wish_srv.go` 的 `RedeemCode`）：
+	//   blindbox → 开 `unlock_count` 款；gamebox → 那 1 款。
+	//
+	// ⚠️ 这两个字符串必须和 C 端 `entities.WishKindBlindbox` / `WishKindGamebox`
+	//    的字面值一致（后台没有那套常量，是裸 string）。写错一个字母的后果是
+	//    「码生成得出来，核销时一款都不授」，而且两边都不报错。
+	switch item.Kind {
+	case "blindbox":
+		if strings.TrimSpace(item.Pool) == "" || strings.TrimSpace(item.Pool) == "[]" {
+			return nil, fmt.Errorf("「%s」是盲盒，但池子是空的 —— 码核销后一款都开不出来；请先给盲盒配好池子", item.Name)
+		}
+	default:
+		if strings.TrimSpace(item.GameID) == "" {
+			return nil, fmt.Errorf("「%s」没有绑定具体游戏，码核销后解锁不出东西；请在商品里选好那一款（盲盒类商品请把分类改成「盲盒」）", item.Name)
+		}
 	}
 
 	batch := strings.TrimSpace(req.Batch)
