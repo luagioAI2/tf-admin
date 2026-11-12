@@ -580,19 +580,22 @@
             v-model="genForm.item_id"
             filterable
             style="width: 100%"
-            placeholder="只能选「游戏」分类的商品"
+            placeholder="游戏盒 或 盲盒"
           >
             <el-option
               v-for="it in codeItems"
               :key="it.item_id"
-              :label="`${it.emoji || '🎁'} ${it.name}`"
+              :label="`${it.emoji || '🎁'} ${it.name}${
+                it.kind === 'blindbox' ? `（一次开 ${it.unlock_count || 1} 款）` : ''
+              }`"
               :value="it.item_id"
             />
           </el-select>
           <div class="hint">
-            码只解锁<b>一款具体游戏</b>，所以只能挂在「游戏」分类的商品上。
-            挂在实物或盲盒上，核销会「成功」但游戏进不了库 —— 那张卡就白卖了。
-            下拉里没有想卖的那款？先去「心愿商品」建一个分类为「游戏」的商品。
+            <b>游戏盒</b>：一张码换那<b>一款</b>。<br />
+            <b>盲盒</b>：一张码换<b>一次开</b>（按商品的「一次开几款」，比如 5 连开）——
+            孩子不用输 5 次码。<br />
+            挂在实物 / 券上核销会「成功」但不授游戏，所以这里不给选。
           </div>
         </el-form-item>
         <el-form-item label="数量" required>
@@ -1077,10 +1080,20 @@
   const itemById = computed(() =>
     Object.fromEntries(allItems.value.map((it) => [it.item_id, it]))
   )
-  /* 能挂码的只有「游戏」分类且绑了 game_id 的 ——
+  /* 能挂码的两种：
+       · 游戏盒（`gamebox`）且绑了某款 —— 一张码换那一款；
+       · 盲盒（`blindbox`）且池子非空 —— 一张码换一次 N 连开（`unlock_count` 款）。
+     2026-11-12 起盲盒也能挂码：线下卖的「盲盒 5 连」就是一张卡。
+     ⚠️ 判 `pool` 而不是 `game_id` —— 盲盒的 `game_id` 本来就是空的，
+        按 `game_id` 过滤会让「5 连开」在弹框里**根本不出现**，
+        运营只会得出「后台不支持卖盲盒卡」这个错误结论。
      后端 GenerateCodes 也会拦，这里先过滤省得白填一遍。 */
   const codeItems = computed(() =>
-    allItems.value.filter((it) => it.kind === 'gamebox' && !!it.game_id)
+    allItems.value.filter((it) =>
+      it.kind === 'blindbox'
+        ? !!it.pool && it.pool !== '[]'
+        : it.kind === 'gamebox' && !!it.game_id
+    )
   )
 
   const loadAllItems = async () => {
